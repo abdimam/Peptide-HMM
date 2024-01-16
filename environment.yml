@@ -1,0 +1,15 @@
+name: hmm
+channels:
+  - defaults
+  - conda-forge
+  - bioconda
+dependencies:
+  - pip
+  - python
+  - jupyter
+  - pandas
+  - numpy
+  - scipy
+  - matplotlib
+  - pip:
+    - pyhmmer

@@ -96,40 +96,35 @@ class Decoder:
         
 
                     
-      
-
-
-    def viterbi(self): #rewritten
+    def viterbi(self):
         prob_matrix = np.full((len(self.states),len(self.seq)), np.inf)
-        backyardigans = np.full((len(self.states),len(self.seq)), np.inf)
-        begin_counter = 1
-        seq_leng_counter = 0
-        seq_leng_threshold = len(self.seq)
+        backyardigans = np.empty((len(self.states),len(self.seq)-1))
+
+        i = 1 #starts on 1 because we have initiated the first symbol below
+        counter_begin = 0
 
         #initiating
-
         prob_matrix[:,0] = self.initial_transition #these are handling the transitions from BEGIN
         prob_matrix[0,0] += self.emission_matrix[0,self.symbols.index(self.seq[0])]
         prob_matrix[1,0] += self.initial_insertion_emission[self.symbols.index(self.seq[0])]
 
 
-        #now we need to take into consideration that D state is silent and thus emitts NOTHING but we still have to emitt a total of len(self.seq_symbols), I think the termination will be done by itself not sure
         temp1 = [np.inf,np.inf,np.inf]
         temp2 = [np.inf,np.inf,np.inf]
         temp3 = [np.inf,np.inf,np.inf]
-        for i in range(1,len(self.seq)):
-            #the inner loop will differ depending on if we succesfully leave the BEGIN state into an MATCH state
-            
-            if begin_counter == 0:
+
+        while i < len(self.seq):
+            if counter_begin == 0:
                 for j in range(len(self.states)):
-                    #V(t)M, this would be going from any state to MATCH
+                     #V(t)M, this would be going from any state to MATCH, considering on that we have not reached a match or delete state
                     if j == 0:
                         temp1[0] = prob_matrix[0,i-1] + self.transition_matrix[i,0] 
-                        temp1[1] = prob_matrix[1,i-1] + self.initial_transition_insert[0] #uses the special transition probability from INSERT0 to MATCH
-                        temp1[2] = prob_matrix[2,i-1] + self.initial_transition_insert[2]
+                        temp1[1] = prob_matrix[1,i-1] + self.initial_transition_insert[0] 
+                        temp1[2] = prob_matrix[2,i-1] + self.transition_matrix[i,2]
 
                         prob_matrix[j,i] = np.min(temp1) + self.emission_matrix[i,self.symbols.index(self.seq[i])]
-                        backyardigans[j,i] = np.argmin(temp1)
+                        backyardigans[j,i-1] = np.argmin(temp1)
+                        
 
                     if j == 1:
                         temp2[0] = prob_matrix[0,i-1] + self.transition_matrix[i,1] 
@@ -141,31 +136,35 @@ class Decoder:
                            # begin_counter += 1
                         else:
                             prob_matrix[j,i] = np.min(temp2) + self.initial_insertion_emission[self.symbols.index(self.seq[i])] #dont have to worry about the case from D > I cuz it will never happen
-                        backyardigans[j,i] = np.argmin(temp2) 
+                        backyardigans[j,i-1] = np.argmin(temp2) 
+
                     if j == 2: #maybe I should do it like durbin shows in page 71?????? not sure how to implement it
                         temp3[0] = prob_matrix[0,i-1] + self.transition_matrix[i,2] 
                         temp3[1] = prob_matrix[1,i-1] + np.inf #I>D never happens
-                        temp3[2] = prob_matrix[2,i-1] + self.initial_transition_insert[3]
+                        temp3[2] = prob_matrix[2,i-1] + self.initial_transition_insert[3] # this is the same as np.inf, the arcitecture of the profile hmm seems to not allows BEGIN > DELETE > DELETE
 
                         prob_matrix[j,i] = np.min(temp3)
-                        backyardigans[j,i] = np.argmin(temp3)
-                if np.argmin(prob_matrix[:,i]) == 0 or np.argmin(prob_matrix[:,i]) == 2:
-                    begin_counter += 1 #should work because if these are the biggest then it means the most likely state 
+                        backyardigans[j,i-1] = np.argmin(temp3)
+                #now we need logic for deciding if we should go over to the other observation and if we are still in the INSERT 0 loop
 
+                #we can check for if we are in the next symbol by deciding if we noted argmax to point at INSERT or MATCH
+                if np.argmax(prob_matrix[:,i]) == 0 or np.argmax(prob_matrix[:,i]) == 1:
+                    i += 1
+                    #we can check if we still are in the INSERT 0 zone by judging if the highest probability was found in DELETE or MATCH
+                if np.argmax(prob_matrix[:,i]) == 0 or np.argmax(prob_matrix[:,i]) == 2:
+                    counter_begin += 1
 
-                if np.argmin(temp1) or np.argmin(temp2) or np.argmin(temp3) == 0: #this would mean that we came from an match state
-                    begin_counter += 1
-
-            if begin_counter > 0:
+            if counter_begin > 0:
+                print("yiiiiiihaaaw")
                 for j in range(len(self.states)):
                     #V(t)M, this would be going from any state to MATCH
                     if j == 0:
                         temp1[0] = prob_matrix[0,i-1] + self.transition_matrix[i,0] 
                         temp1[1] = prob_matrix[1,i-1] + self.transition_matrix[i,3] 
                         temp1[2] = prob_matrix[2,i-1] + self.transition_matrix[i,5]
-
+                        #print(i)
                         prob_matrix[j,i] = np.min(temp1) + self.emission_matrix[i,self.symbols.index(self.seq[i])]
-                        backyardigans[j,i] = np.argmin(temp1)
+                        backyardigans[j,i-1] = np.argmin(temp1)
 
                     if j == 1:
                         temp2[0] = prob_matrix[0,i-1] + self.transition_matrix[i,1] 
@@ -173,24 +172,25 @@ class Decoder:
                         temp2[2] = prob_matrix[2,i-1] + np.inf #stockholm format says that I > D is very unlikely, I think Durbin agrees and so do I
 
                         prob_matrix[j,i] = np.min(temp2) + self.insertion_emission_matrix[i,self.symbols.index(self.seq[i])]
-                        backyardigans[j,i] = np.argmin(temp2) 
+                        backyardigans[j,i-1] = np.argmin(temp2) 
                     if j == 2: #maybe I should do it like durbin shows in page 71?????? not sure how to implement it
                         temp3[0] = prob_matrix[0,i-1] + self.transition_matrix[i,2] 
                         temp3[1] = prob_matrix[1,i-1] + np.inf #I>D never happens
                         temp3[2] = prob_matrix[2,i-1] + self.transition_matrix[1,6]
 
                         prob_matrix[j,i] = np.min(temp3)
-                        backyardigans[j,i] = np.argmin(temp3)
-       
+                        backyardigans[j,i-1] = np.argmin(temp3)
+            if np.argmax(prob_matrix[:,i]) == 0 or np.argmax(prob_matrix[:,i]) == 1:
+                i += 1
         last_state = np.argmin(prob_matrix[:, -1])
 
-       
+        #print(backyardigans)
         best_path = [self.states[last_state]]
 
         # Backtrace from the last column to the first
         for i in range(prob_matrix.shape[1] - 1, 0, -1):
-            last_state = int(backyardigans[last_state, i])
-            best_path.append(self.states[last_state])
+            last_state = backyardigans[int(last_state), i-1]
+            best_path.append(self.states[int(last_state)])
 
 
 
@@ -199,28 +199,13 @@ class Decoder:
         return prob_matrix, best_path, backyardigans
 
 
-
-
-                
-
-
-                    
-                        
-
-
-
-
-
-
-
-test = Decoder(list("GSTQVKGHGKKVADALTNAVLHVDDMPSALSALSDLHAHKLR"),"globins4.hmm")
+test = Decoder(list("GSTQVKGH"),"globins4.hmm")
 lol, lol1, lol2 = test.viterbi()
-print(lol.shape)
+print(lol)
 print(lol1)
 print(lol2)
 
 
-#test = Decoder("VLSDAEWQLVLNIWAKVEADVAGHGQDILIRLFKGHPETLEKFDKFKHLKTEAEMKASEDLKKHGNTVLTALGGILKKKGHHEAELKPLAQSHATKHKIIKYLEFISDAIIHVLHSRHPGDFGADAQAAMNKALELFRKDIAAKYKELGFQG".split(),"globins4.hmm")
-#lol = test.viterbi()
-        
 
+                
+            

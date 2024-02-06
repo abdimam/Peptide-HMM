@@ -128,7 +128,7 @@ class Decoder:
             for col in range(1, (len(seq)+1)):
                     temp = [v_m[0][col-1]["log-odds"] + self.ami[0], v_i[0][col-1]["log-odds"] + self.aii[0]]
                     temp_state = ["M", "I"]
-                    v_i[0][col]={"log-odds": np.min(temp) + self.inemM[0,self.symb_index[col-1]], "prev": (temp_state[np.argmin(temp)], 0, col-1)} 
+                    v_i[0][col]={"log-odds": np.min(temp), "prev": (temp_state[np.argmin(temp)], 0, col-1)} 
                 
 
             for col in range(0, (len(seq)+1)):# initiating the delete chain from start
@@ -143,16 +143,16 @@ class Decoder:
                     
 
                     #v_d
-                    temp = [v_m[row-1][col]["log-odds"] + self.amd[row-1], v_d[row-1][col]["log-odds"] + self.add[row-1]]
+                    temp = [v_m[row-1][col]["log-odds"] + self.amd[row], v_d[row-1][col]["log-odds"] + self.add[row]]
                     v_d[row][col] = {"log-odds": np.min(temp), "prev": (["M", "D"][np.argmin(temp)], row-1, col)}
 
                     #v_i
-                    temp = [v_m[row][col-1]["log-odds"] + self.ami[row-1], v_i[row][col-1]["log-odds"] + self.aii[row-1]]
-                    v_i[row][col] = {"log-odds": np.min(temp)  + self.inemM[row,self.symb_index[col-1]], "prev": (["M", "I"][np.argmin(temp)], row, col-1)}
+                    temp = [v_m[row][col-1]["log-odds"] + self.ami[row], v_i[row][col-1]["log-odds"] + self.aii[row]]
+                    v_i[row][col] = {"log-odds": np.min(temp), "prev": (["M", "I"][np.argmin(temp)], row, col-1)}
 
                     #v_m
-                    temp = [v_m[row-1][col-1]["log-odds"] + self.amm[row-1], v_d[row-1][col-1]["log-odds"] + self.adm[row-1], v_i[row-1][col-1]["log-odds"] + self.aim[row-1]]
-                    v_m[row][col] = {"log-odds": np.min(temp) + self.emM[row-1,self.symb_index[col-1]], "prev": (["M", "D", "I"][np.argmin(temp)], row-1, col-1)}
+                    temp = [v_m[row-1][col-1]["log-odds"] + self.amm[row], v_d[row-1][col-1]["log-odds"] + self.adm[row], v_i[row-1][col-1]["log-odds"] + self.aim[row]]
+                    v_m[row][col] = {"log-odds": np.min(temp) + self.emM[row-1,self.symb_index[col-1]] - self.inemM[row,self.symb_index[col-1]], "prev": (["M", "D", "I"][np.argmin(temp)], row-1, col-1)}
 
             #finally, what we all have been waiting for, what move will take us to the end?
             temp = [v_m[-2][-2]["log-odds"] + self.amm[-1], v_d[-2][-2]["log-odds"] + self.adm[-1], v_i[-2][-2]["log-odds"] + self.aim[-1]]
@@ -162,6 +162,9 @@ class Decoder:
             #where from where did we reach the end?
             #print(v_m[-1][-1]["prev"])
             state, row, col = v_m[-1][-1]["prev"]
+            score = v_m[-1][-1]["log-odds"]
+            score = score / np.log(2)
+            #print(score)
             #print(v_d[-2][-2])
             state_list = []
             while row != None and col != None:
@@ -208,10 +211,10 @@ class Decoder:
             align_seq = "".join(align_seq)
             #print("here is the alignment!", align_seq)
 
-            output_file_path = "viterbi alignment1.txt"
-            file = open(output_file_path, 'w')
-            with open(file, 'a') as file:
-                file.write(">" + id_seq + '\n' + align_seq + '\n')
+            output_file_path = "viterbi alignment with score.txt"
+            
+            with open(output_file_path, 'a') as file:
+                file.write(">" + id_seq + '\n' + align_seq + '\n' + str(score) + '\n')
 
 
 

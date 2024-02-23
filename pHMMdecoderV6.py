@@ -244,11 +244,15 @@ class Decoder:
             raise ValueError("Error: Not a valid algorithm")
         if inverse_mode not in [True, False]:
             raise SyntaxError("Error: Please give a valid boolean value for inverse_mode")
-        elif inverse_mode == True:
-            ir = 0 #inversion ratio, the fraction of transitions that should have gone to M that instead goes to MM
-        else:
-            ir = 0
-        iir = 1-ir #inverted inversion ratio, the fraction that continues to go to M instead of MM
+        #elif inverse_mode == True:
+        #    ir = 0.12/len(seq) #inversion ratio, the fraction of transitions that should have gone to M that instead goes to MM
+                   #this value is based on the frequency of getting a incorrect peptide multiplied with the fraction of the errors that are classifed as an inversion error of 2 residues
+                   #We assume that the probability of such inversion to occour in a peptide is UNIFORM across the whole peptide, so the value is divided by the length of the peptide!
+                   #Another assumtion would be that we expect only one inversion in a peptide (if it is present) because of how previous research have hinted that such errors typically only happens once
+                    #ir = 0.12/len(seq) obs: the error type rate seems to differs greatly between what algorithm where used to generete the peptides so this is a really rough assumtion of eyeballing the average (pepnovo seems to make this kind of error for every 6 peptide genereted....)
+        #else:
+        #    ir = 0
+        #iir = 1-ir #inverted inversion ratio, the fraction that continues to go to M instead of MM
             
         
         
@@ -260,7 +264,6 @@ class Decoder:
                 
 
                 #now for some transition probabilities, in line with what sean R. EDDY said
-                #negative log transforming it all 
                 anb = act = ajb = 3/(len(seq)+3) #? #pretty much the same as hmmer if 3 is replaced with 6?????? wtf
                 ann = ajj = acc = 1-act
 
@@ -285,7 +288,7 @@ class Decoder:
                 #print(dp_m[:,3])
                 for seqi in range(dp_m.shape[0]):
                     for statej in range(2, dp_m.shape[1]-3):
-                        dp_m[seqi,statej] = {"log-odds M": -np.inf,"log-odds I": -np.inf,"log-odds D": -np.inf, "prev": None}
+                        dp_m[seqi,statej] = {"log-odds M": -np.inf,"log-odds I": -np.inf,"log-odds D": -np.inf, "prev": None, "log-odds /MM/": -np.inf, "prev": None}
                 
                 #Start is from dp[0,N] = 0 (nat log transformed so prob 1)
                 dp_m[1,0] = {"log-odds": 0, "prev": None}
@@ -299,42 +302,49 @@ class Decoder:
                     for statej in range(4, dp_m.shape[1]-3):
                         
                         #because of how MM state cant exist when there is only one residue left OR when we are evaluating the last state
-                        if seqi == dp_m.shape[0]-1 or statej == dp_m.shape[1]-4:
-                            ir = 0
-                            irr = 1-0
+                        if inverse_mode == True:
+                            if seqi == dp_m.shape[0]-1 or statej == dp_m.shape[1]-4:
+                                ir = 0
+                                iir = 1-ir
+                            else:
+                                ir = 0.0825 #disregard the wall of comment above, the new value is based on the frequency of WRONG residue times the fraction of the errors that are within this type
+                                iir = 1-ir 
                         else:
                             ir = 0
-                            irr = 1-ir
+                            iir = 1-ir
 
                         #m
-                        T = np.log2(np.exp2(dp_m[seqi-1,statej-1]["log-odds M"]) * self.amm[em_rowind] * iir)
-                        Q = np.log2(np.exp2(dp_m[seqi-1,statej-1]["log-odds I"]) * self.aim[em_rowind] * iir)
-                        S = np.log2(np.exp2(dp_m[seqi-1,statej-1]["log-odds D"]) * self.adm[em_rowind] * iir)
+                        T = np.log2(np.exp2(dp_m[seqi-1,statej-1]["log-odds M"]) * self.amm[em_rowind]  * iir)
+                        Q = np.log2(np.exp2(dp_m[seqi-1,statej-1]["log-odds I"]) * self.aim[em_rowind]  * iir)
+                        S = np.log2(np.exp2(dp_m[seqi-1,statej-1]["log-odds D"]) * self.adm[em_rowind]  * iir)
                         P = np.log2(np.exp2(dp_m[seqi-1,1]["log-odds"]) * abm * iir)
+                        R = np.log2(np.exp2(dp_m[seqi-2,statej-2]["log-odds /MM/"]) * self.amm[em_rowind]  * iir) 
                         if alg_base == "forward":
-                            log_tot = np.logaddexp2.reduce([P,Q,T,S])
+                            log_tot = np.logaddexp2.reduce([P,Q,T,S,R])
                         elif alg_base == "viterbi":
-                            log_tot, prev_ind = np.max([T,Q,S,P]), np.argmax([T,Q,S,P])
+                            log_tot, prev_ind = np.max([T,Q,S,P]), np.argmax([T,Q,S,P,R])
                             
-                            prev_state = ["M","I","D","B"][prev_ind]
+                            prev_state = ["M","I","D","B","/MM/"][prev_ind]
                             #print(prev_state)
-                            prev_pos = [[seqi-1,statej-1], [seqi-1,statej-1], [seqi-1,statej-1], [seqi-1,1]][prev_ind]
+                            prev_pos = [[seqi-1,statej-1], [seqi-1,statej-1], [seqi-1,statej-1], [seqi-1,1], [seqi-2,statej-2]][prev_ind]
                             dp_m[seqi,statej]["prev M"] = (prev_state, prev_pos)
                             #print(dp_m[seqi,statej]["prev"])
                         dp_m[seqi,statej]["log-odds M"] = log_tot + np.log2((self.emM[em_rowind, self.symb_index[seqi-2]]/self.nullem0[self.symb_index[seqi-2]]))
 
-
+#kolla med käll, osäker om jag borde applicera irr här eller om det räcker med att transition probs in till MM och M är behandlade och därmed blir summan av alla probs till 1 fortfarande
+#uses the transition prob of the outer MM (that is, if it is MM1 is it a combination of M1 and M2, M2 is the other one)
 
                         #i
                         P = np.log2(np.exp2(dp_m[seqi-1,statej]["log-odds M"]) * self.ami[em_rowind])
                         Q = np.log2(np.exp2(dp_m[seqi-1,statej]["log-odds I"]) * self.aii[em_rowind])
+                        R = np.log2(np.exp2(dp_m[seqi-1,statej-1]["log-odds /MM/"]) * self.ami[em_rowind]) #This is because Ik depends on the previous MM(k-1) state
                         #temp = np.exp2(dp_m[seqi-1,statej]["log-odds M"]) * self.ami[em_rowind-1] + np.exp2(dp_m[seqi-1,statej]["log-odds I"]) * self.aii[em_rowind-1]
                         if alg_base == "forward":    
-                            PQ = np.logaddexp2(P,Q)
+                            PQ = np.logaddexp2.reduce([P,Q,R])
                         elif alg_base == "viterbi":
-                            PQ, prev_ind = np.max([P,Q]), np.argmax([P,Q])
-                            prev_state = ["M","I"][prev_ind]
-                            prev_pos = [[seqi-1,statej], [seqi-1,statej]][prev_ind]
+                            PQ, prev_ind = np.max([P,Q,R]), np.argmax([P,Q,R])
+                            prev_state = ["M","I","/MM/"][prev_ind]
+                            prev_pos = [[seqi-1,statej], [seqi-1,statej],[seqi-1,statej-1]][prev_ind]
                             dp_m[seqi,statej]["prev I"] = (prev_state, prev_pos)
 
                         #print(PQ)
@@ -343,14 +353,45 @@ class Decoder:
                         #d
                         P = np.log2(np.exp2(dp_m[seqi,statej-1]["log-odds M"]) * self.amd[em_rowind])
                         Q = np.log2(np.exp2(dp_m[seqi,statej-1]["log-odds D"]) * self.add[em_rowind])
+                        R = np.log2(np.exp2(dp_m[seqi,statej-2]["log-odds /MM/"]) * self.amd[em_rowind]) #Easier to understand if one look at the graph diagram but transitions to delete from MM is a jump of 2 states (k) in the diagram
                         if alg_base == "forward":    
-                            PQ = np.logaddexp2(P,Q)
+                            PQ = np.logaddexp2.reduce([P,Q,R])
                         elif alg_base == "viterbi":
-                            PQ, prev_ind = np.max([P,Q]), np.argmax([P,Q])
-                            prev_state = ["M","D"][prev_ind]
-                            prev_pos = [[seqi,statej-1], [seqi,statej-1]][prev_ind]
+                            PQ, prev_ind = np.max([P,Q,R]), np.argmax([P,Q,R])
+                            prev_state = ["M","D","/MM/"][prev_ind]
+                            prev_pos = [[seqi,statej-1], [seqi,statej-1],[seqi,statej-2]][prev_ind]
                             dp_m[seqi,statej]["prev D"] = (prev_state, prev_pos)
                         dp_m[seqi,statej]["log-odds D"] = PQ 
+
+
+                        #mm, 
+                        T = np.log2(np.exp2(dp_m[seqi-1,statej-1]["log-odds M"]) * self.amm[em_rowind] * ir)
+                        Q = np.log2(np.exp2(dp_m[seqi-1,statej-1]["log-odds I"]) * self.aim[em_rowind] * ir)
+                        S = np.log2(np.exp2(dp_m[seqi-1,statej-1]["log-odds D"]) * self.adm[em_rowind] * ir)
+                        P = np.log2(np.exp2(dp_m[seqi-1,1]["log-odds"]) * abm * ir)
+                        R = np.log2(np.exp2(dp_m[seqi-2,statej-2]["log-odds /MM/"]) * self.amm[em_rowind] * ir) #kolla med käll, osäker om jag borde applicera irr här eller om det räcker med att transition probs in till MM och M är behandlade och därmed blir summan av alla probs till 1 fortfarande
+                                                                                                         #uses the transition prob of the outer MM (that is, if it is MM1 is it a combination of M1 and M2, M2 is the other one)
+                        if alg_base == "forward":
+                            log_tot = np.logaddexp2.reduce([P,Q,T,S,R])
+                        elif alg_base == "viterbi":
+                            log_tot, prev_ind = np.max([T,Q,S,P]), np.argmax([T,Q,S,P,R])
+                            
+                            prev_state = ["M","I","D","B","/MM/"][prev_ind]
+                            #print(prev_state)
+                            prev_pos = [[seqi-1,statej-1], [seqi-1,statej-1], [seqi-1,statej-1], [seqi-1,1], [seqi-2,statej-2]][prev_ind]
+                            dp_m[seqi,statej]["prev /MM/"] = (prev_state, prev_pos)
+                            #print(dp_m[seqi,statej]["prev"])
+
+                        #the emission must account for the average emission of the first M emitts residue i and the second M emitts residue i+1 with the reverse event
+                        #index error will happen if this is evaluated at the last state k and last residue, normally we expect the emission score to be 0 in such cases so we make the following condition
+                        if seqi == dp_m.shape[0]-1 or statej == dp_m.shape[1]-4:
+                            dp_m[seqi,statej]["log-odds /MM/"] = log_tot #+ -np.inf
+                        else:
+                            dp_m[seqi,statej]["log-odds /MM/"] = log_tot + (((np.log2((self.emM[em_rowind, self.symb_index[seqi-2]]/self.nullem0[self.symb_index[seqi-2]]))
+                                                                        + np.log2((self.emM[em_rowind+1, self.symb_index[seqi-1]]/self.nullem0[self.symb_index[seqi-1]]))) #that the the first M emits residue i and second M emits reisude i+1
+                                                                        + (np.log2((self.emM[em_rowind, self.symb_index[seqi-1]]/self.nullem0[self.symb_index[seqi-1]]))
+                                                                        + np.log2((self.emM[em_rowind+1, self.symb_index[seqi-2]]/self.nullem0[self.symb_index[seqi-2]])))) #that the the first M emits residue i+1 and second M emits reisude i
+                                                                        -np.log2(2)) #division by 2 to take the average :=)
 
 
 
@@ -364,8 +405,9 @@ class Decoder:
                     for statej in range(4, dp_m.shape[1]-3):
                         holdit.append(np.log(np.exp2(dp_m[seqi,statej]["log-odds M"]) * ame))
                         holdit.append(np.log(np.exp2(dp_m[seqi,statej]["log-odds D"]) * ade))
-                        state_remeber += ["M", "D"]
-                        stateind_remember += [statej, statej]
+                        holdit.append(np.log(np.exp2(dp_m[seqi,statej]["log-odds /MM/"]) * ame)) #assuming that we may end at MM
+                        state_remeber += ["M", "D", "/MM/"]
+                        stateind_remember += [statej, statej, statej]
                     if alg_base == "forward":
                         log_tot = sp.logsumexp(holdit)
                     elif alg_base == "viterbi":
@@ -428,29 +470,34 @@ class Decoder:
 
                 #print(id_seq, (dp_m[-1,-1]["log-odds"] + np.log2(act) - (np.logaddexp2(-len(seq)*np.log2(arr), np.log2(1-arr)))))
                 print(id_seq, (dp_m[-1,-1]["log-odds"] + np.log2(act)) - (len(seq)*np.log2(arr) + np.log2(1-arr)))
-                #print(dp_m[:,3])
+                #print(dp_m[:,5])
                 #print(dp_m[-1,-1]["log-odds"] - len(seq)*np.log2(act))
                 if alg_base == "viterbi":
                     path = []
                     #print(dp_m[50,104]["prev"])
                     path.append(dp_m[-1,-1]["prev"])
-                    for _ in range(len(seq)+3):
+                    while path[-1] is not None:
                         #print(path[-1])
                         #print(path[-1][1])
                         #print([path[-1][1][0], path[-1][1][1]])
-                        if path[-1][0] in ["M","I", "D"]:
+                        if path[-1][0] in ["M","I","D","/MM/"]:
                             if path[-1][0] == "M":
                                 path.append(dp_m[path[-1][1][0], path[-1][1][1]]["prev M"])
                             elif path[-1][0] == "I":
                                 path.append(dp_m[path[-1][1][0], path[-1][1][1]]["prev I"])
                             elif path[-1][0] == "D":
                                 path.append(dp_m[path[-1][1][0], path[-1][1][1]]["prev D"])
+                            elif path[-1][0] == "/MM/":
+                                path.append(dp_m[path[-1][1][0], path[-1][1][1]]["prev /MM/"])
                         else:
                             path.append(dp_m[path[-1][1][0], path[-1][1][1]]["prev"])
-                    capital_letters_only = [item[0] for item in path if item[0].isalpha() and item[0].isupper()]
+                        #print(path)
+                    capital_letters_only = ["S" if item is None else item[0] for item in path]
                     capital_letters_only.reverse()
                     capital_letters_only = ''.join(capital_letters_only)
                     print(capital_letters_only)
+                    print(len(seq))
+                    print(len(capital_letters_only))
 
 
 
@@ -466,4 +513,4 @@ class Decoder:
                 
 test = Decoder("globins45.fa","globins4.hmm")
 #test.forward()
-test.inverse(alg_base="forward", inverse_mode = False)
+test.inverse(alg_base="viterbi", inverse_mode = True)

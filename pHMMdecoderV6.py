@@ -399,7 +399,7 @@ class Decoder:
 
 
                         em_rowind += 1
-                        inem_rowin += 1
+                        inem_rowin += 1 #hej 
                         
                     #e
                     holdit = []

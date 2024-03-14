@@ -128,7 +128,7 @@ class Decoder:
             for col in range(1, (len(seq)+1)):
                     temp = [v_m[0][col-1]["log-odds"] + self.ami[0], v_i[0][col-1]["log-odds"] + self.aii[0]]
                     temp_state = ["M", "I"]
-                    v_i[0][col]={"log-odds": np.min(temp), "prev": (temp_state[np.argmin(temp)], 0, col-1)} 
+                    v_i[0][col]={"log-odds": np.min(temp) + self.inemM[0,self.symb_index[col-1]], "prev": (temp_state[np.argmin(temp)], 0, col-1)} 
                 
 
             for col in range(0, (len(seq)+1)):# initiating the delete chain from start
@@ -148,11 +148,11 @@ class Decoder:
 
                     #v_i
                     temp = [v_m[row][col-1]["log-odds"] + self.ami[row], v_i[row][col-1]["log-odds"] + self.aii[row]]
-                    v_i[row][col] = {"log-odds": np.min(temp), "prev": (["M", "I"][np.argmin(temp)], row, col-1)}
+                    v_i[row][col] = {"log-odds": np.min(temp)  + self.inemM[row,self.symb_index[col-1]], "prev": (["M", "I"][np.argmin(temp)], row, col-1)}
 
                     #v_m
                     temp = [v_m[row-1][col-1]["log-odds"] + self.amm[row], v_d[row-1][col-1]["log-odds"] + self.adm[row], v_i[row-1][col-1]["log-odds"] + self.aim[row]]
-                    v_m[row][col] = {"log-odds": np.min(temp) + self.emM[row-1,self.symb_index[col-1]] - self.inemM[row,self.symb_index[col-1]], "prev": (["M", "D", "I"][np.argmin(temp)], row-1, col-1)}
+                    v_m[row][col] = {"log-odds": np.min(temp) + self.emM[row-1,self.symb_index[col-1]], "prev": (["M", "D", "I"][np.argmin(temp)], row-1, col-1)}
 
             #finally, what we all have been waiting for, what move will take us to the end?
             temp = [v_m[-2][-2]["log-odds"] + self.amm[-1], v_d[-2][-2]["log-odds"] + self.adm[-1], v_i[-2][-2]["log-odds"] + self.aim[-1]]
@@ -212,9 +212,12 @@ class Decoder:
             #print("here is the alignment!", align_seq)
 
             output_file_path = "viterbi alignment with score.txt"
-            
+            nullscore = 0
+            arr = len(seq)/(len(seq)+1) #the transition prob for going from R to R in the null model
+            for i in range(len(seq)):
+                nullscore = nullscore + arr + self.nullem[self.symb_index[i]]
             with open(output_file_path, 'a') as file:
-                file.write(">" + id_seq + '\n' + align_seq + '\n' + str(score) + '\n')
+                file.write(">" + id_seq + '\n' + align_seq + '\n' + str((score-nullscore)/-np.log(2)) + '\n')
 
 
 

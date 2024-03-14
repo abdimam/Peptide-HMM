@@ -89,7 +89,7 @@ class Decoder:
         self.amm = self.tranM[:,0] 
         self.ami = self.tranM[:,1] 
         self.amd = self.tranM[:,2]
-        #self.amd[-2] = np.inf #This might be used, it is really unclear but some sources states that the Plan7viterbi does NOT use the last delete state, as I understand it, it is enough to remove the first delete state in the core model so each search always matches one residue to match
+        self.amd[-2] = np.inf #This might be used, it is really unclear but some sources states that the Plan7viterbi does NOT use the last delete state, as I understand it, it is enough to remove the first delete state in the core model so each search always matches one residue to match
         self.aim = self.tranM[:,3]
         self.aii = self.tranM[:,4]
         self.adm = self.tranM[:,5]
@@ -287,6 +287,95 @@ class Decoder:
             #print(v_n)
             #print(abm)
             #print(v_m[1][123])
+
+    def forward_algorithm(self):
+            for id_seq, stuff in self.sequences:
+                seq = list(stuff)
+                self.symb_index = [self.symbols.index(j) for i, j in enumerate(seq)]
+
+                # Initialize the forward probabilities matrix
+                v_m = [[-np.inf] * (self.leng + 1) for _ in range(len(seq) + 1)]
+                v_i = [[-np.inf] * (self.leng + 1) for _ in range(len(seq) + 1)]
+                v_d = [[-np.inf] * (self.leng + 1) for _ in range(len(seq) + 1)]
+                v_e = [-np.inf] * (len(seq) + 1)
+                v_n = [-np.inf] * (len(seq) + 1)
+                v_b = [-np.inf] * (len(seq) + 1)
+                v_c = [-np.inf] * (len(seq) + 1)
+                v_t = [-np.inf] * (len(seq) + 1)
+                v_j = [-np.inf] * (len(seq) + 1)
+
+                # Initialize start values
+                v_n[0] = 0
+
+                for seqi in range(1, len(seq) + 1):
+                    v_b[seqi] = v_b[seqi - 1] + np.log2(self.anb)
+
+                for seqi in range(1, len(seq) + 1):
+                    for statej in range(1, self.leng + 1):
+                        # m
+                        temp = [v_m[seqi - 1][statej - 1] + np.log2(self.amm[statej - 1]),
+                                v_i[seqi - 1][statej - 1] + np.log2(self.aim[statej - 1]),
+                                v_d[seqi - 1][statej - 1] + np.log2(self.adm[statej - 1]),
+                                v_b[seqi - 1] + np.log2(self.abm)]
+                        v_m[seqi][statej] = np.logaddexp.reduce(temp) + np.log2(self.emM[statej - 1, self.symb_index[seqi - 1]] / self.inemM[statej, self.symb_index[seqi - 1]])
+
+                        # i
+                        temp = [v_m[seqi - 1][statej] + np.log2(self.ami[statej - 1]),
+                                v_i[seqi - 1][statej] + np.log2(self.aii[statej - 1])]
+                        v_i[seqi][statej] = np.logaddexp.reduce(temp)
+
+                        # d
+                        temp = [v_m[seqi][statej - 1] + np.log2(self.amd[statej - 1]),
+                                v_d[seqi][statej - 1] + np.log2(self.add[statej - 1])]
+                        v_d[seqi][statej] = np.logaddexp.reduce(temp)
+
+                    # e
+                    v_mbest = np.inf
+                    v_dbest = np.inf
+
+                    for bro in range(1, self.leng + 1):
+                        if v_mbest > v_m[seqi][bro]:
+                            v_mstatej = bro
+                            v_mbest = v_m[seqi][bro]
+
+                        if v_dbest > v_d[seqi][bro]:
+                            v_dstatej = bro
+                            v_dbest = v_d[seqi][bro]
+
+                    temp = [v_mbest + np.log2(self.ame),
+                            v_dbest + np.log2(self.ade)]
+                    v_e[seqi] = np.logaddexp.reduce(temp)
+
+                    # n
+                    v_n[seqi] = v_n[seqi - 1] + np.log2(self.ann)
+
+                    # j
+                    temp = [v_e[seqi] + np.log2(self.aej),
+                            v_j[seqi - 1] + np.log2(self.ajj)]
+                    v_j[seqi] = np.logaddexp.reduce(temp)
+
+                    # c
+                    temp = [v_e[seqi] + np.log2(self.aec),
+                            v_c[seqi - 1] + np.log2(self.acc)]
+                    v_c[seqi] = np.logaddexp.reduce(temp)
+
+                    # b
+                    temp = [v_n[seqi] + np.log2(self.anb),
+                            v_j[seqi] + np.log2(self.ajb)]
+                    v_b[seqi] = np.logaddexp.reduce(temp)
+
+                # Calculate the nullscore
+                nullscore = np.log2(len(seq) / (len(seq) + 1)) * len(seq)
+
+                # Calculate the final log-odds score
+                final_score = (v_c[-1] + np.log2(self.act) - (nullscore + np.log2(1 - np.exp(-nullscore)))) / -np.log2(2)
+
+                print("The sequence id is", id_seq, "with len", len(seq))
+                print("The log-odds score is", final_score)
+
+    # Example usage:
+    # your_hmm_instance = YourHMMClass()
+    # your_hmm_instance.forward_algorithm()
 
 
 

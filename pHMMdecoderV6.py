@@ -307,7 +307,9 @@ class Decoder:
                                 ir = 0
                                 iir = 1-ir
                             else:
-                                ir = 0.0825 #disregard the wall of comment above, the new value is based on the frequency of WRONG residue times the fraction of the errors that are within this type
+                                ir = 0.02564102564102564
+                                                             #disregard the wall of comment above, the new value is based on the frequency of WRONG residue times the fraction of the errors that are within this type
+                                        
                                 iir = 1-ir 
                         else:
                             ir = 0
@@ -369,8 +371,7 @@ class Decoder:
                         Q = np.log2(np.exp2(dp_m[seqi-1,statej-1]["log-odds I"]) * self.aim[em_rowind] * ir)
                         S = np.log2(np.exp2(dp_m[seqi-1,statej-1]["log-odds D"]) * self.adm[em_rowind] * ir)
                         P = np.log2(np.exp2(dp_m[seqi-1,1]["log-odds"]) * abm * ir)
-                        R = np.log2(np.exp2(dp_m[seqi-2,statej-2]["log-odds /MM/"]) * self.amm[em_rowind] * ir) #kolla med käll, osäker om jag borde applicera irr här eller om det räcker med att transition probs in till MM och M är behandlade och därmed blir summan av alla probs till 1 fortfarande
-                                                                                                         #uses the transition prob of the outer MM (that is, if it is MM1 is it a combination of M1 and M2, M2 is the other one)
+                        R = np.log2(np.exp2(dp_m[seqi-2,statej-2]["log-odds /MM/"]) * self.amm[em_rowind] * ir) 
                         if alg_base == "forward":
                             log_tot = np.logaddexp2.reduce([P,Q,T,S,R])
                         elif alg_base == "viterbi":
@@ -387,11 +388,13 @@ class Decoder:
                         if seqi == dp_m.shape[0]-1 or statej == dp_m.shape[1]-4:
                             dp_m[seqi,statej]["log-odds /MM/"] = log_tot #+ -np.inf
                         else:
-                            dp_m[seqi,statej]["log-odds /MM/"] = log_tot + (((np.log2((self.emM[em_rowind, self.symb_index[seqi-2]]/self.nullem0[self.symb_index[seqi-2]]))
-                                                                        + np.log2((self.emM[em_rowind+1, self.symb_index[seqi-1]]/self.nullem0[self.symb_index[seqi-1]]))) #that the the first M emits residue i and second M emits reisude i+1
-                                                                        + (np.log2((self.emM[em_rowind, self.symb_index[seqi-1]]/self.nullem0[self.symb_index[seqi-1]]))
-                                                                        + np.log2((self.emM[em_rowind+1, self.symb_index[seqi-2]]/self.nullem0[self.symb_index[seqi-2]])))) #that the the first M emits residue i+1 and second M emits reisude i
-                                                                        -np.log2(2)) #division by 2 to take the average :=)
+                            dp_m[seqi,statej]["log-odds /MM/"] = log_tot + (np.log2(self.emM[em_rowind, self.symb_index[seqi-2]]/self.nullem0[self.symb_index[seqi-2]] 
+                                                                                * self.emM[em_rowind+1, self.symb_index[seqi-1]]/self.nullem0[self.symb_index[seqi-1]] #the joined probability of M(k) emits x(i) and M(k+1) emits x(i+1)
+                                                                                 + self.emM[em_rowind, self.symb_index[seqi-1]]/self.nullem0[self.symb_index[seqi-1]]  # addition of these two events, addition because these are alternative events so addition is the right operation
+                                                                                * self.emM[em_rowind+1, self.symb_index[seqi-2]]/self.nullem0[self.symb_index[seqi-2]] #the joined probability of M(k) emits x(i+1) and M(k+1) emits x(i)
+                                                                                ) - np.log2(2)) #division by two to average out these events!
+                            
+
 
 
 

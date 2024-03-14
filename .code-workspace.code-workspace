@@ -1,12 +1,11 @@
 {
-	"folders": [
-		{
-			"name": "Flute",
-			"uri": "flute:/"
-		},
-		{
-			"path": "."
-		}
-	],
-	"settings": {}
+    "folders": [
+        {
+            "name": "Flute",
+            "uri": "flute:/"
+        },
+        {
+            "path": "."
+        }
+    ]
 }

@@ -514,6 +514,6 @@ class Decoder:
                 
 
                 
-test = Decoder("globins45.fa","globins4.hmm")
+test = Decoder("Peptide-HMM\globins45.fa","Peptide-HMM\globins4.hmm")
 #test.forward()
 test.inverse(alg_base="viterbi", inverse_mode = True)

@@ -1,7 +1,7 @@
 import numpy as np
 import scipy.special as sp
 import math
-
+from tqdm import tqdm
 import numpy as np
 
 class Decoder:
@@ -40,6 +40,7 @@ class Decoder:
         self.tranM = np.array([])
         self.emM = np.array([])
         self.inemM = np.array([])
+        self.consseq = ""
         counter_states = 0
         with open(profhmm, 'r') as hmm_file:
             
@@ -69,6 +70,7 @@ class Decoder:
                     temp = [float(i) if i != "*" else np.inf for i in line[1:21]]
                     self.emM = np.vstack([self.emM, temp])
                     counter_states += 1
+                    self.consseq += line[22]
                     continue
                 if counter_states == 3:
                     temp = np.array([float(i) if i != "*" else np.inf for i in line])
@@ -239,7 +241,7 @@ class Decoder:
 
 
 
-    def inverse(self, alg_base="forward", inverse_mode = False):
+    def inverse(self, alg_base="forward", inverse_mode = False, consensus_alignment = False):
         if alg_base not in ["forward", "viterbi"]:
             raise ValueError("Error: Not a valid algorithm")
         if inverse_mode not in [True, False]:
@@ -256,7 +258,7 @@ class Decoder:
             
         
         
-        for id_seq, stuff in self.sequences:
+        for id_seq, stuff in tqdm(self.sequences, desc="Sequences decoded"):
                 #print("Alignment of", id_seq)
                 seq = list(stuff)
                 
@@ -399,7 +401,7 @@ class Decoder:
 
 
                         em_rowind += 1
-                        inem_rowin += 1 #hej HEJ
+                        inem_rowin += 1 
                         
                     #e
                     holdit = []
@@ -472,35 +474,186 @@ class Decoder:
                     dp_m[seqi,1]["log-odds"] = PQ
 
                 #print(id_seq, (dp_m[-1,-1]["log-odds"] + np.log2(act) - (np.logaddexp2(-len(seq)*np.log2(arr), np.log2(1-arr)))))
-                print(id_seq, (dp_m[-1,-1]["log-odds"] + np.log2(act)) - (len(seq)*np.log2(arr) + np.log2(1-arr)))
-                #print(dp_m[:,5])
-                #print(dp_m[-1,-1]["log-odds"] - len(seq)*np.log2(act))
-                if alg_base == "viterbi":
-                    path = []
-                    #print(dp_m[50,104]["prev"])
-                    path.append(dp_m[-1,-1]["prev"])
-                    while path[-1] is not None:
-                        #print(path[-1])
-                        #print(path[-1][1])
-                        #print([path[-1][1][0], path[-1][1][1]])
-                        if path[-1][0] in ["M","I","D","/MM/"]:
-                            if path[-1][0] == "M":
-                                path.append(dp_m[path[-1][1][0], path[-1][1][1]]["prev M"])
-                            elif path[-1][0] == "I":
-                                path.append(dp_m[path[-1][1][0], path[-1][1][1]]["prev I"])
-                            elif path[-1][0] == "D":
-                                path.append(dp_m[path[-1][1][0], path[-1][1][1]]["prev D"])
-                            elif path[-1][0] == "/MM/":
-                                path.append(dp_m[path[-1][1][0], path[-1][1][1]]["prev /MM/"])
-                        else:
-                            path.append(dp_m[path[-1][1][0], path[-1][1][1]]["prev"])
+                with open("output.txt", "a") as f:
+                    result = id_seq + "\n"  # Start building the result string with id_seq
+                    result += str((dp_m[-1,-1]["log-odds"] + np.log2(act)) - (len(seq)*np.log2(arr) + np.log2(1-arr))) + "\n"  # Append the computation result
+                    if alg_base == "viterbi" and consensus_alignment == True:
+                        path = []
+                        path.append(dp_m[-1,-1]["prev"])
+                        while path[-1] is not None:
+                            if path[-1][0] in ["M", "I", "D", "/MM/"]:
+                                if path[-1][0] == "M":
+                                    path.append(dp_m[path[-1][1][0], path[-1][1][1]]["prev M"])
+                                elif path[-1][0] == "I":
+                                    path.append(dp_m[path[-1][1][0], path[-1][1][1]]["prev I"])
+                                elif path[-1][0] == "D":
+                                    path.append(dp_m[path[-1][1][0], path[-1][1][1]]["prev D"])
+                                elif path[-1][0] == "/MM/":
+                                    path.append(dp_m[path[-1][1][0], path[-1][1][1]]["prev /MM/"])
+                            else:
+                                path.append(dp_m[path[-1][1][0], path[-1][1][1]]["prev"])
                         #print(path)
-                    capital_letters_only = ["S" if item is None else item[0] for item in path]
-                    capital_letters_only.reverse()
-                    capital_letters_only = ''.join(capital_letters_only)
-                    print(capital_letters_only)
-                    print(len(seq))
-                    print(len(capital_letters_only))
+                        capital_letters_only = ["S" if item is None else item[0] for item in path]
+                        capital_letters_only.reverse()
+                        path.reverse()
+                        capital_letters_only = ''.join(capital_letters_only)
+                        result += capital_letters_only + " "  # Append the computed result
+                        #we need to add a functionallity to align the optimum states to the consesnsus structure of the profile turn them into the corresponding residues
+                        #consensus sequences is already parsed, contained in self.consseq
+                        #we need to know where the found optimum states are located in the model
+                        #we also need to carry over the functionalitty to pinpoint inverted residues
+                        aligned_seq = []
+                        previous_char = None
+                        envelop_list = []
+                        for index, element in enumerate(path):
+                            if element == None:
+                                aligned_seq.append(False)
+                            elif element[0] == 'N':
+                                if previous_char == 'N':
+                                    aligned_seq.append(True)
+                                else:
+                                    aligned_seq.append(False)
+                            elif element[0] == "B":
+                                aligned_seq.append(False)
+                                envelop_list.append(index)
+                            elif element[0] == "M":
+                                aligned_seq.append(True)
+                            elif element[0] == "I":
+                                aligned_seq.append(True)
+                            elif element[0] == "D":
+                                aligned_seq.append(True)
+                            elif element[0] == "/MM/":
+                                aligned_seq.append(True)
+                            elif element[0] == "E":
+                                aligned_seq.append(False)
+                                envelop_list.append(index)
+                            elif element[0] == 'J':
+                                if previous_char == 'J':
+                                    aligned_seq.append(True)
+                                else:
+                                    aligned_seq.append(False)
+                            previous_char = element[0] if element is not None else element
+                        pairs = []
+                        for i in range(0, len(envelop_list), 2):
+                            if i + 1 < len(envelop_list):
+                                pairs.append((envelop_list[i], envelop_list[i + 1]))
+                        #print(pairs)
+                        intervals = []
+                        model_interval = []
+                        seq_interval = []
+                        for envelop in pairs:
+                            intervals.append((path[envelop[0]+1][1],path[envelop[1]-1][1]))
+                        for inter in intervals:
+                            model_interval.append((inter[0][1],inter[1][1]))
+                            seq_interval.append((inter[0][0],inter[1][0]))
+                        #print(seq_interval)
+                        #print(model_interval)
+                        
+                        domain_list = []
+                        aligned_list = []
+                        sub_seq = ""
+                        for inter in model_interval:
+                            domain_list.append(self.consseq[inter[0]-4:inter[1]-3])
+                        for inter in seq_interval:
+                            for i in range(inter[0]-2, inter[1]-1):
+                                sub_seq += seq[i]
+                            aligned_list.append(sub_seq)
+                            sub_seq = ""
+                        #print(domain_list, len(domain_list[0]))
+                        #print(aligned_list, len(aligned_list[0]))
+
+                        ## Initialize list to store extracted substrings
+                        substring_list = []
+
+                        # Initialize flag to indicate whether to start storing substring
+                        store_substring = False
+
+                        # Iterate over characters in the input string
+                        for char in capital_letters_only:
+                            # If current character is "B", set flag to start storing substring
+                            if char == "B":
+                                store_substring = True
+                                substring = ""
+                            # If current character is "E", set flag to stop storing substring
+                            elif char == "E":
+                                store_substring = False
+                                substring_list.append(substring)
+                            # If flag is True, store current character in substring
+                            elif store_substring:
+                                substring += char
+                        #print(capital_letters_only)
+                        #print(substring_list)
+                        modified_list = []
+
+                        for aligned_string, substring_string in zip(aligned_list, substring_list):
+                            modified_string = ""
+                            substring_iterator = iter(substring_string)
+
+                            for aligned_char in aligned_string:
+                                try:
+                                    substring_char = next(substring_iterator)
+                                except StopIteration:
+                                    break
+
+                                if substring_char == "D":
+                                    modified_string += "-" 
+                                    modified_string += aligned_char  # Include aligned_char # Add "-"
+                                elif substring_char == "M":
+                                    modified_string += aligned_char.upper()
+                                elif substring_char == "I":
+                                    modified_string += aligned_char.lower()
+                                elif substring_char == "/":
+                                    modified_string += "/"
+                                else:
+                                    modified_string += aligned_char
+
+                            modified_list.append(modified_string)
+
+                        #print(modified_list)
+
+
+
+                            
+
+
+                                
+
+
+
+
+
+                            
+
+
+
+
+                            
+
+                        
+
+                    result += "\n"  # Start a new line for the next result
+
+
+                    print(result)
+                    for consensus, mod_ali in zip(domain_list, modified_list):
+                        alignment_str = ""
+                        for consensus_char, mod_ali_char in zip(consensus, mod_ali):
+                            consensus_char = consensus_char.lower()  # Convert to lowercase
+                            mod_ali_char = mod_ali_char.lower()      # Convert to lowercase
+                            if consensus_char == mod_ali_char:
+                                alignment_str += "\033[92m" + consensus_char + "\033[0m"  # Green for conserved residues
+                            elif consensus_char == "-" or mod_ali_char == "-":
+                                alignment_str += "\033[91m" + "*" + "\033[0m"  # Red asterisk for gaps
+                            elif mod_ali_char == "/":
+                                alignment_str += "\033[93m" + "/" + "\033[0m"  # Yellow for "/"
+                            else:
+                                alignment_str += mod_ali_char  # Display modified alignment
+                        print("Consensus:       ", consensus)
+                        print("Target sequence: ", alignment_str)
+                        print("//////////////////////")
+                    #f.write(result)
+                        #print(len(seq))
+                        #print(len(capital_letters_only))
 
 
 
@@ -514,6 +667,6 @@ class Decoder:
                 
 
                 
-test = Decoder("Peptide-HMM\globins45.fa","Peptide-HMM\globins4.hmm")
+test = Decoder("globins45.fa","globins4.hmm")
 #test.forward()
-test.inverse(alg_base="viterbi", inverse_mode = True)
+test.inverse(alg_base="viterbi", inverse_mode = True, consensus_alignment = True)

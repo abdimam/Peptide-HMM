@@ -1,10 +1,15 @@
 import numpy as np
 import scipy.special as sp
-import math
+from tabulate import tabulate
 from tqdm import tqdm
 import numpy as np
 
+
 class Decoder:
+    import warnings
+
+    # Filter out RuntimeWarnings
+    warnings.filterwarnings("ignore", category=RuntimeWarning)
     def __init__(self, sequences, profhmm):
 
 
@@ -241,7 +246,7 @@ class Decoder:
 
 
 
-    def inverse(self, alg_base="forward", inverse_mode = False, consensus_alignment = False):
+    def inverse(self, alg_base="forward", inverse_mode = False, consensus_alignment = False, mspeptide_alignment = True):
         if alg_base not in ["forward", "viterbi"]:
             raise ValueError("Error: Not a valid algorithm")
         if inverse_mode not in [True, False]:
@@ -255,12 +260,20 @@ class Decoder:
         #else:
         #    ir = 0
         #iir = 1-ir #inverted inversion ratio, the fraction that continues to go to M instead of MM
+        if alg_base == "viterbi" and consensus_alignment == True and mspeptide_alignment == True:
+            print("Consensus sequence:       ",self.consseq)
             
         
-        
-        for id_seq, stuff in tqdm(self.sequences, desc="Sequences decoded"):
+        total_sequences = len(self.sequences)
+        progress_bar = tqdm(total=total_sequences, desc="Sequences decoded", position=0)
+        modified_list_mspepalign = [self.consseq]
+        id_list = ["Consensus seq"]
+        state_list = []
+        for id_seq, stuff in self.sequences:
+                
                 #print("Alignment of", id_seq)
                 seq = list(stuff)
+                len_seq = len(seq)
                 
                 self.symb_index = [self.symbols.index(j) for j in seq] #easier usage later
                 
@@ -497,6 +510,7 @@ class Decoder:
                         capital_letters_only.reverse()
                         path.reverse()
                         capital_letters_only = ''.join(capital_letters_only)
+                        capital_letters_only = capital_letters_only.replace("/MM/", "ÖÖ")
                         result += capital_letters_only + " "  # Append the computed result
                         #we need to add a functionallity to align the optimum states to the consesnsus structure of the profile turn them into the corresponding residues
                         #consensus sequences is already parsed, contained in self.consseq
@@ -588,25 +602,46 @@ class Decoder:
                         for aligned_string, substring_string in zip(aligned_list, substring_list):
                             modified_string = ""
                             substring_iterator = iter(substring_string)
+                            print("hej",aligned_string, substring_string)
 
-                            for aligned_char in aligned_string:
+                            stopper = 0  # Initialize the stopper flag
+                            aligned_iterator = iter(aligned_string)
+                            deleter = 0
+                            while True:
                                 try:
+                                    if deleter == 0:
+                                        aligned_char = next(aligned_iterator)
+                                    else:
+                                        print("jag e bög", aligned_char)
+                                    
                                     substring_char = next(substring_iterator)
+                                    if stopper == 1:
+                                        print("big bög", substring_char)
                                 except StopIteration:
                                     break
 
+                                #if stopper == 1:  # Check if stopper flag is set
+                                #    stopper = 0  # Reset the stopper flag
+                                #    continue  # Stay on the same iteration if stopper is 1
+                                if deleter == 1:
+                                    deleter = 0
+                                #    continue
+
                                 if substring_char == "D":
                                     modified_string += "-" 
-                                    modified_string += aligned_char  # Include aligned_char # Add "-"
+                                    deleter = 1
+                                    #modified_string += aligned_char  # Include aligned_char # Add "-"
                                 elif substring_char == "M":
+                                    stopper = 0
                                     modified_string += aligned_char.upper()
                                 elif substring_char == "I":
+                                    stopper = 0
+                                    #modified_string += aligned_char.lower()
+                                elif substring_char == "Ö":
+                                    #stopper = 1
                                     modified_string += aligned_char.lower()
-                                elif substring_char == "/":
-                                    modified_string += "/"
-                                else:
-                                    modified_string += aligned_char
-
+                                    #modified_string += aligned_char
+                            print("DÅ", modified_string)
                             modified_list.append(modified_string)
 
                         #print(modified_list)
@@ -628,37 +663,215 @@ class Decoder:
 
 
                             
-
+                    state_list.append(capital_letters_only)
                         
 
                     result += "\n"  # Start a new line for the next result
 
 
                     print(result)
-                    for consensus, mod_ali in zip(domain_list, modified_list):
-                        alignment_str = ""
-                        for consensus_char, mod_ali_char in zip(consensus, mod_ali):
-                            consensus_char = consensus_char.lower()  # Convert to lowercase
-                            mod_ali_char = mod_ali_char.lower()      # Convert to lowercase
-                            if consensus_char == mod_ali_char:
-                                alignment_str += "\033[92m" + consensus_char + "\033[0m"  # Green for conserved residues
-                            elif consensus_char == "-" or mod_ali_char == "-":
-                                alignment_str += "\033[91m" + "*" + "\033[0m"  # Red asterisk for gaps
-                            elif mod_ali_char == "/":
-                                alignment_str += "\033[93m" + "/" + "\033[0m"  # Yellow for "/"
-                            else:
-                                alignment_str += mod_ali_char  # Display modified alignment
-                        print("Consensus:       ", consensus)
-                        print("Target sequence: ", alignment_str)
-                        print("//////////////////////")
+
+                    
+                    if alg_base == "viterbi" and consensus_alignment == True and mspeptide_alignment == False:
+                        for consensus, mod_ali in zip(domain_list, modified_list):
+                            alignment_str = ""
+                            for consensus_char, mod_ali_char in zip(consensus, mod_ali):
+                                consensus_char = consensus_char.lower()  # Convert to lowercase
+                                mod_ali_char = mod_ali_char.lower()      # Convert to lowercase
+                                if consensus_char == mod_ali_char:
+                                    alignment_str += "\033[92m" + consensus_char + "\033[0m"  # Green for conserved residues
+                                elif consensus_char == "-" or mod_ali_char == "-":
+                                    alignment_str += "\033[91m" + "*" + "\033[0m"  # Red asterisk for gaps
+                                elif mod_ali_char == "/":
+                                    alignment_str += "\033[93m" + "/" + "\033[0m"  # Yellow for "/"
+                                else:
+                                    alignment_str += mod_ali_char  # Display modified alignment
+                            print("Consensus:       ", consensus)
+                            print("Target sequence: ", alignment_str)
+                            print("//////////////////////")
                     #f.write(result)
                         #print(len(seq))
                         #print(len(capital_letters_only))
-
-
-
-                
+                if alg_base == "viterbi" and consensus_alignment == True and mspeptide_alignment == True:
+                    for i, mod_ali in enumerate(modified_list):
+                        empty_seq = list(" " * len(self.consseq))
+                        mod_ali_list = list(mod_ali)
+                        empty_seq[model_interval[i][0]-4:model_interval[i][1]-3] = mod_ali_list
+                        modified_list_mspepalign.append("".join(empty_seq))
+                        id_list.append(id_seq)
+                    
             
+                progress_bar.update(1)
+        progress_bar.close()
+
+        def find_blank_spaces(input_string): #needed for checking for gaps, for the sake of finding the minimum amount of needed peptides to give full coverages
+            blank_spaces_indices = []
+            for index, char in enumerate(input_string):
+                if char.isspace():
+                    blank_spaces_indices.append(index)
+            return blank_spaces_indices
+        def compare_lists(list1, list2):
+            # Convert lists to sets to perform set operations
+            set1 = set(list1)
+            set2 = set(list2)
+            
+            # Find common values
+            common_values = set1.intersection(set2)
+            
+            # Create a new list with common values
+            new_list = list(common_values)
+            
+            return new_list
+        full_peptide_cov = None
+        merged = []  # Initialize the list of merged indices
+        gaps_check = True
+        taken_list = []
+        i = 1
+        while i < len(modified_list_mspepalign):
+            if i in taken_list:
+                i += 1
+                #print("SKIPPED", taken_list)
+                continue   
+            seq = modified_list_mspepalign[i][:len(self.consseq)]
+            j = 1
+            while j < len(modified_list_mspepalign):
+                start_index = None
+                end_index = None
+                seq_comp = modified_list_mspepalign[j]
+                for idx, char in enumerate(seq_comp):
+                    if char != ' ':
+                        start_index = idx
+                        break
+                for idx in range(len(seq_comp) - 1, -1, -1):
+                    if seq_comp[idx] != ' ':
+                        end_index = idx
+                        break
+                if seq[start_index:end_index] == " " * (end_index - start_index) and j not in taken_list: #seq_comp[start_index:end_index] not in merged:
+                    modified_seq = seq[:start_index] + seq_comp[start_index:end_index] + seq[end_index:len(self.consseq)]
+                    seq = modified_seq
+                    merged.append(seq_comp[start_index:end_index])
+                    taken_list.append(j)
+                j += 1
+                modified_list_mspepalign[i] = seq
+                if gaps_check is True:
+                    if i == 1 and find_blank_spaces(seq) == []: #in the case full coverage is achived just from the first "assembly" of aligned peptides, REALLY unlikely
+                        full_peptide_cov = len(set(taken_list)) + i #amount of peptide sequences that have been appended plus the amount of peptides that these peptides have been appended to
+                        gaps_check == False
+                    elif i == 1:
+                        gaps_prev = find_blank_spaces(seq)
+                    else:
+                        gaps_curr = find_blank_spaces(seq)
+                        gaps = compare_lists(gaps_curr, gaps_prev) #the amount of gaps present so far
+                        if gaps == []:
+                            full_peptide_cov = len(set(taken_list)) + i
+                            gaps_check == False
+                        else:
+                            gaps_prev = gaps
+
+                
+            i += 1
+
+
+        #Remove elements from modified_list_mspepalign using indices in merged
+        for index in sorted(taken_list, reverse=True):
+            if 0 <= index < len(modified_list_mspepalign):
+                del modified_list_mspepalign[index]
+
+        # Remove duplicates from modified_list_mspepalign while preserving order
+        #modified_list_mspepalign = list(dict.fromkeys(modified_list_mspepalign))
+        
+        
+        if alg_base == "viterbi" and consensus_alignment == True and mspeptide_alignment == True:
+            # ANSI escape code for blue color
+            blue_color = "\033[94m"
+            # ANSI escape code to reset color
+            reset_color = "\033[0m"
+            
+            # Print table header
+            print(f"{'ID':<20} {'Alignment'}")
+            
+            
+            
+            def most_occuring_letter(sequences):
+                # Initialize the resulting sequence
+                result_sequence = ''
+                # Iterate over each position in the sequences
+                for i in range(len(sequences[0])):
+                    # Initialize a dictionary to count occurrences of characters at this position
+                    char_count = {}
+                    # Iterate over each sequence
+                    for sequence in sequences[1:]:
+                        # Get the character at this position in the sequence
+                        char = sequence[i]
+                        if char == char.lower:
+                            char_inv = sequence[i+1]
+                        # Update the count for this character
+                        if char.strip():  # Check if the character is not whitespace
+                            if char == char.lower:
+                                char_count[char.upper] = char_count.get(char.upper, 0) + 1
+                                char_count[char_inv.upper] = char_count.get(char_inv.upper, 0) + 1
+                            else:
+                                char_count[char] = char_count.get(char, 0) + 1
+                    # Get the most occurring non-whitespace character at this position
+                    most_occuring_char = max(char_count, key=char_count.get, default=' ')
+                    # Append the most occurring character to the result sequence
+                    result_sequence += most_occuring_char
+                return result_sequence
+            def count_letters(strings_list, letters):
+                total_residues = sum(len(peptide) for peptide in strings_list) - len(strings_list) * 3
+                total_letter_count = 0
+                
+                for peptide in strings_list:
+                    for letter in letters:
+                        total_letter_count += peptide.count(letter)
+                
+                if letters == ["N"] or letters == ["C"]:
+                    total_letter_count -= len(strings_list)
+
+                
+                return total_letter_count / total_residues
+            
+            
+            print("Estimated procentage of peptide residues predicted to be homologous to the model:\n",count_letters(state_list, ["M","I","D","Ö"]))
+            print("Estimated procentage of peptide residues predicted to be non-homologous to the model, N-terminal side:\n", count_letters(state_list, ["N"]))
+            print("Estimated procentage of peptide residues predicted to be non-homologous to the model, C-terminal side:\n", count_letters(state_list, ["C"]))
+            print("Estimated procentage of peptide residues predicted to be encompass inversion uncertainty:\n", count_letters(state_list, ["Ö"]))
+             # ANSI escape code for blue color
+            blue_color = "\033[94m"
+            # ANSI escape code to reset color
+            reset_color = "\033[0m"
+            red_color = "\033[91m"  # ANSI escape code for red color
+            ref_seq = most_occuring_letter(modified_list_mspepalign)
+            # Print table header
+            print(f"{'ID':<20} {'Alignment'}")
+            print(f"{'resulting sequence:':<26} {ref_seq}")
+            for i, mod_ali in enumerate(modified_list_mspepalign):
+                if i == 0:
+                    # Print the first mod_ali in blue
+                    print(f"{'Conensus':<20} {i:<5} {blue_color}{mod_ali}{reset_color}")
+                else:
+                    highlighted_mod_ali = ''
+                    for mod_char, ref_char in zip(mod_ali, ref_seq):
+                        if mod_char == ref_char or mod_char == ' ':
+                            highlighted_mod_ali += mod_char
+                        else:
+                            # Highlight differences in red
+                            highlighted_mod_ali += red_color + mod_char + reset_color
+                    print(f"{'Alignment':<20} {i:<5} {highlighted_mod_ali}")
+
+            if full_peptide_cov is not None:
+                print("Estimated amount of peptides needed for full coverages:", full_peptide_cov)
+            else:
+                print("Coverages to the model estimated to (%):", (len(self.consseq) - len(gaps)) / len(self.consseq))
+
+
+
+            #Evaluating the coverage and estimating the best guess for the full protein sequence
+            #We will estimate the frequencies of amino acids in our alignment, residues generated from MM state will count two corresponding residues to
+                    
+
+                                
+                            
 
 
 
@@ -667,6 +880,6 @@ class Decoder:
                 
 
                 
-test = Decoder("globins45.fa","globins4.hmm")
+test = Decoder("sequences.fasta","Hanti")
 #test.forward()
-test.inverse(alg_base="viterbi", inverse_mode = True, consensus_alignment = True)
+test.inverse(alg_base="viterbi", inverse_mode = True, consensus_alignment = True, mspeptide_alignment = True)

@@ -125,7 +125,7 @@ class Decoder:
         self.states = self.states + ["END"] #will not be used but needed to releate the index in the dp_matrix row with the state
         #print(self.states)
         self.nullem0 = [0.0787945, 0.0151600, 0.0535222, 0.0668298, 0.0397062, 0.0695071, 0.0229198, 0.0590092, 0.0594422, 0.0963728, 0.0237718, 0.0414386, 0.0482904, 0.0395639, 0.0540978, 0.0683364, 0.0540687, 0.0673417, 0.0114135, 0.0304133]
-        #self.nullem0 = [i/100 for i in self.nullem0]
+        #self.nullem0 = np.log2(self.nullem0)
 
 
     def forward(self):
@@ -179,8 +179,8 @@ class Decoder:
                     #OH YEAH feels like evil number hacking
                     #switched it with numpys function
                     #m
-                    T = np.log2(np.exp2(dp_m[seqi-1,statej-1]["log-odds M"]) * self.amm[em_rowind])
-                    Q = np.log2(np.exp2(dp_m[seqi-1,statej-1]["log-odds I"]) * self.aim[em_rowind])
+                    T = np.log2(np.exp2(dp_m[seqi-1,statej-1]["log-odds M"]) * self.amm[em_rowind]) # = dp_m[seqi-1,statej-1]["log-odds M"] + np.log2(self.amm[em_rowind])
+                    Q = np.log2(np.exp2(dp_m[seqi-1,statej-1]["log-odds I"]) * self.aim[em_rowind]) # = dp_m[seqi-1,statej-1]["log-odds I"] + np.log2(self.adm[em_rowind])
                     S = np.log2(np.exp2(dp_m[seqi-1,statej-1]["log-odds D"]) * self.adm[em_rowind])
                     P = np.log2(np.exp2(dp_m[seqi-1,1]["log-odds"]) * abm)
                     
@@ -268,7 +268,7 @@ class Decoder:
         progress_bar = tqdm(total=total_sequences, desc="Sequences decoded", position=0)
         modified_list_mspepalign = [self.consseq]
         id_list = ["Consensus seq"]
-        state_list = []
+        state_list,full_state_list = [],[]
         for id_seq, stuff in self.sequences:
                 
                 #print("Alignment of", id_seq)
@@ -331,11 +331,11 @@ class Decoder:
                             iir = 1-ir
 
                         #m
-                        T = np.log2(np.exp2(dp_m[seqi-1,statej-1]["log-odds M"]) * self.amm[em_rowind]  * iir)
-                        Q = np.log2(np.exp2(dp_m[seqi-1,statej-1]["log-odds I"]) * self.aim[em_rowind]  * iir)
-                        S = np.log2(np.exp2(dp_m[seqi-1,statej-1]["log-odds D"]) * self.adm[em_rowind]  * iir)
-                        P = np.log2(np.exp2(dp_m[seqi-1,1]["log-odds"]) * abm * iir)
-                        R = np.log2(np.exp2(dp_m[seqi-2,statej-2]["log-odds /MM/"]) * self.amm[em_rowind]  * iir) 
+                        T = dp_m[seqi-1,statej-1]["log-odds M"] + np.log2(self.amm[em_rowind]  * iir)
+                        Q = dp_m[seqi-1,statej-1]["log-odds I"] + np.log2(self.adm[em_rowind] * iir)
+                        S = dp_m[seqi-1,statej-1]["log-odds D"] + np.log2(self.adm[em_rowind]  * iir)
+                        P = dp_m[seqi-1,1]["log-odds"] + np.log2( abm * iir)
+                        R = dp_m[seqi-2,statej-2]["log-odds /MM/"] + np.log2(self.amm[em_rowind]  * iir)
                         if alg_base == "forward":
                             log_tot = np.logaddexp2.reduce([P,Q,T,S,R])
                         elif alg_base == "viterbi":
@@ -352,9 +352,9 @@ class Decoder:
 #uses the transition prob of the outer MM (that is, if it is MM1 is it a combination of M1 and M2, M2 is the other one)
 
                         #i
-                        P = np.log2(np.exp2(dp_m[seqi-1,statej]["log-odds M"]) * self.ami[em_rowind])
-                        Q = np.log2(np.exp2(dp_m[seqi-1,statej]["log-odds I"]) * self.aii[em_rowind])
-                        R = np.log2(np.exp2(dp_m[seqi-1,statej-1]["log-odds /MM/"]) * self.ami[em_rowind]) #This is because Ik depends on the previous MM(k-1) state
+                        P = dp_m[seqi-1,statej]["log-odds M"] + np.log2(self.ami[em_rowind])
+                        Q = dp_m[seqi-1,statej]["log-odds I"] + np.log2(self.aii[em_rowind])
+                        R = dp_m[seqi-1,statej-1]["log-odds /MM/"] + np.log2(self.ami[em_rowind]) #This is because Ik depends on the previous MM(k-1) state
                         #temp = np.exp2(dp_m[seqi-1,statej]["log-odds M"]) * self.ami[em_rowind-1] + np.exp2(dp_m[seqi-1,statej]["log-odds I"]) * self.aii[em_rowind-1]
                         if alg_base == "forward":    
                             PQ = np.logaddexp2.reduce([P,Q,R])
@@ -368,9 +368,9 @@ class Decoder:
                         dp_m[seqi,statej]["log-odds I"] = PQ + np.log2((self.inemM[inem_rowin, self.symb_index[seqi-2]]/self.nullem0[self.symb_index[seqi-2]]))
 
                         #d
-                        P = np.log2(np.exp2(dp_m[seqi,statej-1]["log-odds M"]) * self.amd[em_rowind])
-                        Q = np.log2(np.exp2(dp_m[seqi,statej-1]["log-odds D"]) * self.add[em_rowind])
-                        R = np.log2(np.exp2(dp_m[seqi,statej-2]["log-odds /MM/"]) * self.amd[em_rowind]) #Easier to understand if one look at the graph diagram but transitions to delete from MM is a jump of 2 states (k) in the diagram
+                        P = dp_m[seqi,statej-1]["log-odds M"] + np.log2(self.amd[em_rowind])
+                        Q = dp_m[seqi,statej-1]["log-odds D"] + np.log2(self.add[em_rowind])
+                        R = dp_m[seqi,statej-2]["log-odds /MM/"] + np.log2(self.amd[em_rowind]) #Easier to understand if one look at the graph diagram but transitions to delete from MM is a jump of 2 states (k) in the diagram
                         if alg_base == "forward":    
                             PQ = np.logaddexp2.reduce([P,Q,R])
                         elif alg_base == "viterbi":
@@ -382,11 +382,11 @@ class Decoder:
 
 
                         #mm, 
-                        T = np.log2(np.exp2(dp_m[seqi-1,statej-1]["log-odds M"]) * self.amm[em_rowind] * ir)
-                        Q = np.log2(np.exp2(dp_m[seqi-1,statej-1]["log-odds I"]) * self.aim[em_rowind] * ir)
-                        S = np.log2(np.exp2(dp_m[seqi-1,statej-1]["log-odds D"]) * self.adm[em_rowind] * ir)
-                        P = np.log2(np.exp2(dp_m[seqi-1,1]["log-odds"]) * abm * ir)
-                        R = np.log2(np.exp2(dp_m[seqi-2,statej-2]["log-odds /MM/"]) * self.amm[em_rowind] * ir) 
+                        T = dp_m[seqi-1,statej-1]["log-odds M"] + np.log2(self.amm[em_rowind] * ir)
+                        Q = dp_m[seqi-1,statej-1]["log-odds I"] + np.log2(self.aim[em_rowind] * ir)
+                        S = dp_m[seqi-1,statej-1]["log-odds D"] + np.log2(self.adm[em_rowind] * ir)
+                        P = dp_m[seqi-1,1]["log-odds"] + np.log2(abm * ir)
+                        R = dp_m[seqi-2,statej-2]["log-odds /MM/"] + np.log2(self.amm[em_rowind] * ir) 
                         if alg_base == "forward":
                             log_tot = np.logaddexp2.reduce([P,Q,T,S,R])
                         elif alg_base == "viterbi":
@@ -421,13 +421,16 @@ class Decoder:
                     state_remeber = []
                     stateind_remember = []
                     for statej in range(4, dp_m.shape[1]-3):
-                        holdit.append(np.log(np.exp2(dp_m[seqi,statej]["log-odds M"]) * ame))
-                        holdit.append(np.log(np.exp2(dp_m[seqi,statej]["log-odds D"]) * ade))
-                        holdit.append(np.log(np.exp2(dp_m[seqi,statej]["log-odds /MM/"]) * ame)) #assuming that we may end at MM
+                        holdit.append(dp_m[seqi,statej]["log-odds M"] + np.log2(ame))
+                        holdit.append(dp_m[seqi,statej]["log-odds D"] + np.log2(ade))
+                        holdit.append(dp_m[seqi,statej]["log-odds /MM/"] + np.log2(ame)) #assuming that we may end at MM
                         state_remeber += ["M", "D", "/MM/"]
                         stateind_remember += [statej, statej, statej]
                     if alg_base == "forward":
+                        #logsumexp function is fast.....but only does it on the natural log, transform it to natural log and back into log 2, might not be efficient
+                        holdit = holdit / np.log2(np.e)
                         log_tot = sp.logsumexp(holdit)
+                        log_tot = log_tot * np.log2(np.e)
                     elif alg_base == "viterbi":
                         log_tot, prev_ind = np.max(holdit), np.argmax(holdit)
                         prev_state = state_remeber[prev_ind]
@@ -438,7 +441,7 @@ class Decoder:
                         #print(prev_pos)
                         #prev_pos = [index.tolist() for index in prev_pos]
                         dp_m[seqi,-3]["prev"] = (prev_state, [seqi,prev_pos])
-                    log_tot = log_tot/np.log(2)
+                    #log_tot = log_tot/np.log(2)
                     #log_tot = np.logaddexp2.reduce(holdit)
                     #print(log_tot)
 
@@ -449,8 +452,8 @@ class Decoder:
                     dp_m[seqi,0]["prev"] = ("N", [seqi-1,0])
 
                     #j
-                    P = np.log2(np.exp2(dp_m[seqi,-3]["log-odds"]) * aej)
-                    Q = np.log2(np.exp2(dp_m[seqi-1,-2]["log-odds"]) * ajj)
+                    P = dp_m[seqi,-3]["log-odds"] + np.log2(aej)
+                    Q = dp_m[seqi-1,-2]["log-odds"] + np.log2(ajj)
                     if alg_base == "forward":
                         PQ = np.logaddexp2(P,Q)
                     elif alg_base == "viterbi":
@@ -461,8 +464,8 @@ class Decoder:
                     dp_m[seqi,-2]["log-odds"] = PQ
                     
                     #c
-                    P = np.log2(np.exp2(dp_m[seqi,-3]["log-odds"]) * aec)
-                    Q = np.log2(np.exp2(dp_m[seqi-1,-1]["log-odds"]) * acc)
+                    P = dp_m[seqi,-3]["log-odds"] + np.log2(aec)
+                    Q = dp_m[seqi-1,-1]["log-odds"] + np.log2(acc)
                     if alg_base == "forward":
                         PQ = np.logaddexp2(P,Q)
                     elif alg_base == "viterbi":
@@ -474,8 +477,8 @@ class Decoder:
                     dp_m[seqi,-1]["log-odds"] = PQ
 
                     #b
-                    P = np.log2(np.exp2(dp_m[seqi,0]["log-odds"]) * anb)
-                    Q = np.log2(np.exp2(dp_m[seqi,-2]["log-odds"]) * ajb)
+                    P = dp_m[seqi,0]["log-odds"] + np.log2(anb)
+                    Q = dp_m[seqi,-2]["log-odds"] + np.log2(ajb)
                     if alg_base == "forward":
                         PQ = np.logaddexp2(P,Q)
                     elif alg_base == "viterbi":
@@ -490,7 +493,8 @@ class Decoder:
                 with open("output.txt", "a") as f:
                     result = id_seq + "\n"  # Start building the result string with id_seq
                     result += str((dp_m[-1,-1]["log-odds"] + np.log2(act)) - (len(seq)*np.log2(arr) + np.log2(1-arr))) + "\n"  # Append the computation result
-                    if alg_base == "viterbi" and consensus_alignment == True:
+                    bitscore = (dp_m[-1,-1]["log-odds"] + np.log2(act)) - (len(seq)*np.log2(arr) + np.log2(1-arr))
+                    if alg_base == "viterbi" and consensus_alignment == True and bitscore >= -5:
                         path = []
                         path.append(dp_m[-1,-1]["prev"])
                         while path[-1] is not None:
@@ -662,17 +666,20 @@ class Decoder:
 
 
 
-                            
-                    state_list.append(capital_letters_only)
+                    
                         
 
                     result += "\n"  # Start a new line for the next result
 
 
                     print(result)
-
+                    if bitscore >= -5:
+                        full_state_list.append(capital_letters_only)        
+                        state_list.append(substring_string)
                     
-                    if alg_base == "viterbi" and consensus_alignment == True and mspeptide_alignment == False:
+                    if alg_base == "viterbi" and consensus_alignment == True and mspeptide_alignment == False and bitscore >= -5:
+                        full_state_list.append(capital_letters_only)        
+                        state_list.append(substring_string)
                         for consensus, mod_ali in zip(domain_list, modified_list):
                             alignment_str = ""
                             for consensus_char, mod_ali_char in zip(consensus, mod_ali):
@@ -692,7 +699,7 @@ class Decoder:
                     #f.write(result)
                         #print(len(seq))
                         #print(len(capital_letters_only))
-                if alg_base == "viterbi" and consensus_alignment == True and mspeptide_alignment == True:
+                if alg_base == "viterbi" and consensus_alignment == True and mspeptide_alignment == True and bitscore >= -5:
                     for i, mod_ali in enumerate(modified_list):
                         empty_seq = list(" " * len(self.consseq))
                         mod_ali_list = list(mod_ali)
@@ -726,6 +733,7 @@ class Decoder:
         merged = []  # Initialize the list of merged indices
         gaps_check = True
         taken_list = []
+        estimation_peptides_cov = 0
         i = 1
         while i < len(modified_list_mspepalign):
             if i in taken_list:
@@ -746,25 +754,30 @@ class Decoder:
                     if seq_comp[idx] != ' ':
                         end_index = idx
                         break
-                if seq[start_index:end_index] == " " * (end_index - start_index) and j not in taken_list: #seq_comp[start_index:end_index] not in merged:
-                    modified_seq = seq[:start_index] + seq_comp[start_index:end_index] + seq[end_index:len(self.consseq)]
+                if seq[start_index:end_index+1] == (" " * (end_index + 1 - start_index)) and j not in taken_list: #seq_comp[start_index:end_index] not in merged:
+                    modified_seq = seq[:start_index] + seq_comp[start_index:end_index+1] + seq[end_index+1:len(self.consseq)]
                     seq = modified_seq
-                    merged.append(seq_comp[start_index:end_index])
+                    merged.append(seq_comp[start_index:end_index+1])
                     taken_list.append(j)
+                    estimation_peptides_cov += 1
                 j += 1
                 modified_list_mspepalign[i] = seq
-                if gaps_check is True:
+                if gaps_check == True:
                     if i == 1 and find_blank_spaces(seq) == []: #in the case full coverage is achived just from the first "assembly" of aligned peptides, REALLY unlikely
                         full_peptide_cov = len(set(taken_list)) + i #amount of peptide sequences that have been appended plus the amount of peptides that these peptides have been appended to
                         gaps_check == False
                     elif i == 1:
                         gaps_prev = find_blank_spaces(seq)
+                        gaps = compare_lists(find_blank_spaces(" " * len(self.consseq)), gaps_prev)
                     else:
                         gaps_curr = find_blank_spaces(seq)
                         gaps = compare_lists(gaps_curr, gaps_prev) #the amount of gaps present so far
+                        print("these are the gaps", gaps)
                         if gaps == []:
                             full_peptide_cov = len(set(taken_list)) + i
-                            gaps_check == False
+                            print("borde ej ske", i, gaps)
+                            estimation_peptides_cov = i
+                            gaps_check = False
                         else:
                             gaps_prev = gaps
 
@@ -807,7 +820,7 @@ class Decoder:
                             char_inv = sequence[i+1]
                         # Update the count for this character
                         if char.strip():  # Check if the character is not whitespace
-                            if char == char.lower:
+                            if char == char.lower and char_inv == char_inv.lower:
                                 char_count[char.upper] = char_count.get(char.upper, 0) + 1
                                 char_count[char_inv.upper] = char_count.get(char_inv.upper, 0) + 1
                             else:
@@ -818,24 +831,37 @@ class Decoder:
                     result_sequence += most_occuring_char
                 return result_sequence
             def count_letters(strings_list, letters):
-                total_residues = sum(len(peptide) for peptide in strings_list) - len(strings_list) * 3
+                total_residues = sum(len(peptide) for peptide in strings_list)
                 total_letter_count = 0
+                for peptide in strings_list:
+                    total_residues -= 4
+                    if "C" in peptide:
+                        total_residues -= 1
                 
                 for peptide in strings_list:
                     for letter in letters:
                         total_letter_count += peptide.count(letter)
+                if letters == ["Ö"]:
+                    print("Ö", total_letter_count)
                 
-                if letters == ["N"] or letters == ["C"]:
-                    total_letter_count -= len(strings_list)
+                if letters == ["N"]:
+                    for peptide in strings_list:
+                        if "N" in peptide:
+                            total_letter_count -= 1
+                if letters == ["C"]:
+                    for peptide in strings_list:
+                        if "C" in peptide:
+                            total_letter_count -= 1
+                
 
-                
+
                 return total_letter_count / total_residues
             
             
-            print("Estimated procentage of peptide residues predicted to be homologous to the model:\n",count_letters(state_list, ["M","I","D","Ö"]))
-            print("Estimated procentage of peptide residues predicted to be non-homologous to the model, N-terminal side:\n", count_letters(state_list, ["N"]))
-            print("Estimated procentage of peptide residues predicted to be non-homologous to the model, C-terminal side:\n", count_letters(state_list, ["C"]))
-            print("Estimated procentage of peptide residues predicted to be encompass inversion uncertainty:\n", count_letters(state_list, ["Ö"]))
+            print("Estimated procentage of peptide residues predicted to be homologous to the model:\n",count_letters(full_state_list, ["M","I","D","Ö"]))
+            print("Estimated procentage of peptide residues predicted to be non-homologous to the model, N-terminal side:\n", count_letters(full_state_list, ["N"]))
+            print("Estimated procentage of peptide residues predicted to be non-homologous to the model, C-terminal side:\n", count_letters(full_state_list, ["C"]))
+            print("Estimated procentage of peptide residues predicted to be encompass inversion uncertainty:\n", count_letters(full_state_list, ["Ö"]))
              # ANSI escape code for blue color
             blue_color = "\033[94m"
             # ANSI escape code to reset color
@@ -845,6 +871,7 @@ class Decoder:
             # Print table header
             print(f"{'ID':<20} {'Alignment'}")
             print(f"{'resulting sequence:':<26} {ref_seq}")
+            mismatch = 0
             for i, mod_ali in enumerate(modified_list_mspepalign):
                 if i == 0:
                     # Print the first mod_ali in blue
@@ -857,12 +884,18 @@ class Decoder:
                         else:
                             # Highlight differences in red
                             highlighted_mod_ali += red_color + mod_char + reset_color
+                            mismatch += 1
                     print(f"{'Alignment':<20} {i:<5} {highlighted_mod_ali}")
 
             if full_peptide_cov is not None:
-                print("Estimated amount of peptides needed for full coverages:", full_peptide_cov)
+                print("Estimated amount of peptides needed for full coverages:", estimation_peptides_cov)
+                print("Procentage of mismatched residues in the peptide alignment:", (mismatch/sum(len(peptide) for peptide in state_list)))
+                print("test", len(set(taken_list)) + i)
             else:
                 print("Coverages to the model estimated to (%):", (len(self.consseq) - len(gaps)) / len(self.consseq))
+                print("Procentage of mismatched residues in the peptide alignment:", (mismatch/sum(len(peptide) for peptide in state_list)))
+
+                print(mismatch, sum(len(peptide) for peptide in state_list), len(self.consseq), len(gaps))
 
 
 
@@ -880,6 +913,6 @@ class Decoder:
                 
 
                 
-test = Decoder("sequences.fasta","Hanti")
+test = Decoder("sequences.FASTA","abdihmm")
 #test.forward()
-test.inverse(alg_base="viterbi", inverse_mode = True, consensus_alignment = True, mspeptide_alignment = True)
+test.inverse(alg_base="viterbi", inverse_mode = False, consensus_alignment = True, mspeptide_alignment = True)

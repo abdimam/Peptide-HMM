@@ -562,7 +562,7 @@ class Decoder:
                             #print("LESSGO", curr)
                             #print(curr)
                             if curr[2] == 0:
-                                if curr[1] > 3 and curr[1] < len(dp_mv[1])-4:
+                                if curr[1] > 3 and curr[1] < len(dp_mv[1])-3:
                                     holder.append("M")
                                     if enve_check == True:
                                         envelop.append(curr[1])
@@ -599,7 +599,7 @@ class Decoder:
                                         enve_check = False
                             going = curr
 
-                        
+
                         full_state_list.append(holder)
                         #print(full_state_list)
                         envelop = [(envelop[i]-4, envelop[i + 1]-4) for i in range(0, len(envelop), 2)]
@@ -616,6 +616,8 @@ class Decoder:
                         else:
                             state_list = [state_list]
 
+                        
+
 
                         #print("LESSSGO",state_list)
 
@@ -623,47 +625,62 @@ class Decoder:
                         #print(envelop)
                         #print(envelop_res)
                         #print(seq)
-                        for ind, i in enumerate(envelop):
-                            empty_seq = [" "] * self.leng
+
+
+                        elements_to_remove = ["J"]
+                        for ind, bruh in enumerate(state_list):
+                            jcount = bruh.count("J")
+                            holder = [element for element in bruh if element not in elements_to_remove]
+                            state_list[ind] = holder
+                        envelop_res.reverse()
+                        envelop.reverse()
+
 
                             
 
                             #print(envelop[ind][0],envelop[ind][1])
                             #print(envelop_res[ind][0],envelop_res[ind][1])
                             #print(seq[envelop_res[ind][0]:envelop_res[ind][1]])
-                            
-                            
-                            #print(state_list)
-                            #print(envelop_res[0][0])
-                            for ind2, char in enumerate(state_list):
-                                #print(char)
-                                i=0
-                                holder2 = []
-                                for charchar in char:
-                                # print("SUG MIN KUK VRE",len(state_list), len(seq))
-                                    #print("HALLÅ",charchar)
-                                    #print(seq)
-                                    #print(ind2)
-                                    if charchar == "M":
-                                        holder2.append(seq[envelop_res[ind2][0] + i])
 
-                                    elif charchar == "D":
-                                        holder2.append("-")
-                                        i -= 1
-                                        
-                                    elif charchar == "Ö":
-                                        holder2.append(seq[envelop_res[ind2][0] + i].lower())
-                                        holder2.append(seq[envelop_res[ind2][0] + i+1].lower())
-                                        i += 1
+                        #print(full_state_list)
+                        #print(state_list)
+                        #print(envelop_res)
+                        for ind2, char in enumerate(state_list):
+                            #print(char)
+                            i=0
+                            holder2 = []
+                            empty_seq = [" "] * self.leng
+                            for charchar in char: #I have no ide WHY I need to have 3 forloops but am stupid mode rizzler gyaaaaat hunter so let it be
+                                empty_seq = [" "] * (self.leng)
+                            # print("SUG MIN KUK VRE",len(state_list), len(seq))
+                                #print("HALLÅ",charchar)
+                                #print(seq)
+                                #print(ind2)
+                                if charchar == "M":
+                                    #print(envelop_res[ind2][0] + i)
+                                    if ind2 == 0:
+                                        #print(i)
+                                        holder2.append(seq[envelop_res[ind2][0]-jcount + i])
+                                    else:
+                                        holder2.append(seq[envelop_res[ind2][0] + i])  
+
+                                elif charchar == "D":
+                                    holder2.append("-")
+                                    i -= 1
+                                    
+                                elif charchar == "Ö":
+                                    holder2.append(seq[envelop_res[ind2][0] + i].lower())
+                                    holder2.append(seq[envelop_res[ind2][0] + i+1].lower())
                                     i += 1
-                                #print(holder2)
+                                i += 1
+                            #print(holder2)
 
-                                
-                                empty_seq[envelop[ind2][0]:envelop[ind2][1]] = holder2
+                            
+                            empty_seq[envelop[ind2][0]:envelop[ind2][1]] = holder2
 
-                                #print("PLS PLS PLS", empty_seq)
-                                if result > -7:
-                                    modified_list_mspepalign.append(empty_seq)
+                            #print("PLS PLS PLS", empty_seq)
+                            if result > -7:
+                                modified_list_mspepalign.append(empty_seq)
                     #print(result)
 
 
@@ -1143,119 +1160,7 @@ class Decoder:
             
                 progress_bar.update(1)
         progress_bar.close()
-
-        print(len(modified_list_mspepalign[0]))
-        def find_blank_spaces(input_string): #needed for checking for gaps, for the sake of finding the minimum amount of needed peptides to give full coverages
-            blank_spaces_indices = []
-            for index, char in enumerate(input_string):
-                if char.isspace():
-                    blank_spaces_indices.append(index)
-            return blank_spaces_indices
-
-        def compare_lists(list1, list2):
-            # Convert lists to sets to perform set operations
-            set1 = set(list1)
-            set2 = set(list2)
-            
-            # Find common values
-            common_values = set1.intersection(set2)
-            
-            # Create a new list with common values
-            new_list = list(common_values)
-            
-            return new_list
-        #print(modified_list_mspepalign)
-        #print(modified_list_mspepalign)
-        def assambly_time(consseq, modified_list_mspepalign):
-            full_peptide_cov = None
-            merged = []  # Initialize the list of merged indices
-            gaps_check = True
-            taken_list = []
-            estimation_peptides_cov = 0
-            i = 1
-            while i < len(modified_list_mspepalign):
-                if i in taken_list:
-                    i += 1
-                    #print("SKIPPED", taken_list)
-                    continue   
-                seq = modified_list_mspepalign[i][:len(consseq)]
-                j = 1
-                while j < len(modified_list_mspepalign):
-                    start_index = None
-                    end_index = None
-                    seq_comp = modified_list_mspepalign[j]
-                    for idx, char in enumerate(seq_comp):
-                        if char != ' ':
-                            start_index = idx
-                            break
-                    for idx in range(len(seq_comp) - 1, -1, -1):
-                        if seq_comp[idx] != ' ':
-                            end_index = idx
-                            break
-                    #print("????",seq[start_index:end_index+1], ([" "] * (end_index + 1 - start_index)))
-                    if seq[start_index:end_index+1] == ([" "] * (end_index + 1 - start_index)) and j not in taken_list: #seq_comp[start_index:end_index] not in merged:
-                        #print("LESSSGo")
-                        modified_seq = seq[:start_index] + seq_comp[start_index:end_index+1] + seq[end_index+1:len(consseq)]
-                        seq = modified_seq
-                        merged.append(seq_comp[start_index:end_index+1])
-                        taken_list.append(j)
-                        estimation_peptides_cov += 1
-                    j += 1
-                    modified_list_mspepalign[i] = seq
-                    #print(len(seq))
-                    if gaps_check == True:
-                        if i == 1 and " " not in seq: #in the case full coverage is achived just from the first "assembly" of aligned peptides, REALLY unlikely
-                            full_peptide_cov = len(set(taken_list)) + i #amount of peptide sequences that have been appended plus the amount of peptides that these peptides have been appended to
-                            gaps_check == False
-                        elif i == 1:
-                            gaps_prev = find_blank_spaces(seq)
-                            gaps = compare_lists(find_blank_spaces(" " * len(consseq)), gaps_prev)
-                        else:
-                            gaps_curr = find_blank_spaces(seq)
-                            gaps = compare_lists(gaps_curr, gaps_prev) #the amount of gaps present so far
-                            if len(gaps) == 0:
-                                full_peptide_cov = len(set(taken_list)) + i
-                                estimation_peptides_cov = i
-                                gaps_check = False
-                            else:
-                                gaps_prev = gaps
-
-                    
-                i += 1
-            return gaps, estimation_peptides_cov, full_peptide_cov, taken_list
-        gaps, estimation_peptides_cov, full_peptide_cov, taken_list = assambly_time(self.consseq, modified_list_mspepalign)
-
-        
-
-
-        #Remove elements from modified_list_mspepalign using indices in merged
-        for index in sorted(taken_list, reverse=True):
-            if 0 <= index < len(modified_list_mspepalign):
-                del modified_list_mspepalign[index]
-        
-
-        # Remove duplicates from modified_list_mspepalign while preserving order
-        #modified_list_mspepalign = list(dict.fromkeys(modified_list_mspepalign))
-        
-        
-        if alg_base == "viterbi" and consensus_alignment == True and mspeptide_alignment == True:
-            # ANSI escape code for blue color
-            blue_color = "\033[94m"
-            # ANSI escape code to reset color
-            reset_color = "\033[0m"
-            
-            # Print table header
-            def print_header():
-                ID = 'ID'
-                Alignment = 'Alignment'
-                print("{:<20} {}".format(ID, Alignment))
-
-            # Call the function
-            print_header()
-            
-            
-            
-            def most_occuring_letter(sequences):
+        def most_occuring_letter(sequences):
                 # Initialize the resulting sequence
                 result_sequence = ''
                 # Iterate over each position in the sequences
@@ -1283,6 +1188,161 @@ class Decoder:
                     except IndexError:
                         print("WTF",sequence, len(sequence), len(self.consseq))
                 return result_sequence
+
+        ref_seq = most_occuring_letter(modified_list_mspepalign)
+
+        def find_blank_spaces(input_string): #needed for checking for gaps, for the sake of finding the minimum amount of needed peptides to give full coverages
+            blank_spaces_indices = []
+            for index, char in enumerate(input_string):
+                if char.isspace():
+                    blank_spaces_indices.append(index)
+            return blank_spaces_indices
+
+        def compare_lists(list1, list2):
+            # Convert lists to sets to perform set operations
+            set1 = set(list1)
+            set2 = set(list2)
+            
+            # Find common values
+            common_values = set1.intersection(set2)
+            
+            # Create a new list with common values
+            new_list = list(common_values)
+            
+            return new_list
+        #print(modified_list_mspepalign)
+        #print(modified_list_mspepalign)
+
+        def sort_list2(list1):
+            # Transpose list1 to get columns
+            columns = zip(*list1)
+            
+            # Initialize progress bar
+            total_iterations = len(list1)
+            progress_bar = tqdm(total=total_iterations, desc="Sorting Columns")
+            
+            # Sort each column separately
+            sorted_columns = []
+            for col in columns:
+                non_whitespace = [x for x in col if x != " "]
+                whitespace = [x for x in col if x == " "]
+                sorted_col = non_whitespace + whitespace
+                sorted_columns.append(sorted_col)
+                
+                # Update progress bar
+                progress_bar.update(1)
+            
+            # Close progress bar
+            progress_bar.close()
+
+            # Transpose back to rows
+            sorted_list1 = [list(row) for row in zip(*sorted_columns)]
+            
+            # Remove elements that are just lists filled with whitespace
+            sorted_list1 = [row for row in sorted_list1 if set(row) != {" "}]
+            
+            # Calculate gaps
+            gaps = sorted_list1[1].count(" ")
+            sorted_list1[0] = "".join(sorted_list1[0])
+
+            return sorted_list1, gaps
+        
+        modified_list_mspepalign, gaps = sort_list2(modified_list_mspepalign)
+
+        
+        def assambly_time(consseq, modified_list_mspepalign):
+            progress_bar2 = tqdm(total=len(modified_list_mspepalign), desc="Sequences visually aligned", position=0, miniters=0)
+            full_peptide_cov = None
+            merged = []  # Initialize the list of merged indices
+            gaps_check = True
+            taken_list = []
+            estimation_peptides_cov = 0
+            i = 1
+            while i < len(modified_list_mspepalign):
+                if i in taken_list:
+                    i += 1
+                    #print("SKIPPED", taken_list)
+                    continue   
+                seq = modified_list_mspepalign[i][:len(consseq)]
+                j = 1
+                while j < len(modified_list_mspepalign):
+                    start_index = None
+                    end_index = None
+                    seq_comp = modified_list_mspepalign[j]
+                    for idx, char in enumerate(seq_comp):
+                        if char != ' ':
+                            start_index = idx
+                            break
+                    for idx in range(len(seq_comp) - 1, -1, -1):
+                        if seq_comp[idx] != ' ':
+                            end_index = idx
+                            break
+                    #print("????",seq[start_index:end_index+1], ([" "] * (end_index + 1 - start_index)))
+                    if seq[start_index:end_index+1] == (" " * (end_index + 1 - start_index)) and j not in taken_list: #seq_comp[start_index:end_index] not in merged:
+                        #print("LESSSGo")
+                        modified_seq = seq[:start_index] + seq_comp[start_index:end_index+1] + seq[end_index+1:len(consseq)]
+                        seq = modified_seq
+                        merged.append(seq_comp[start_index:end_index+1])
+                        taken_list.append(j)
+                        estimation_peptides_cov += 1
+                    j += 1
+                    modified_list_mspepalign[i] = seq
+                    #print(len(seq))
+                    if gaps_check == True:
+                        if i == 1 and " " not in seq: #in the case full coverage is achived just from the first "assembly" of aligned peptides, REALLY unlikely
+                            full_peptide_cov = len(set(taken_list)) + i #amount of peptide sequences that have been appended plus the amount of peptides that these peptides have been appended to
+                            gaps_check == False
+                        elif i == 1:
+                            gaps_prev = find_blank_spaces(seq)
+                            gaps = compare_lists(find_blank_spaces(" " * len(consseq)), gaps_prev)
+                        else:
+                            gaps_curr = find_blank_spaces(seq)
+                            gaps = compare_lists(gaps_curr, gaps_prev) #the amount of gaps present so far
+                            if len(gaps) == 0:
+                                full_peptide_cov = len(set(taken_list)) + i
+                                estimation_peptides_cov = i
+                                gaps_check = False
+                            else:
+                                gaps_prev = gaps
+                progress_bar2.update(1)
+            
+                        
+                i += 1
+
+            return gaps, estimation_peptides_cov, full_peptide_cov, taken_list
+        #gaps, estimation_peptides_cov, full_peptide_cov, taken_list = assambly_time(self.consseq, modified_list_mspepalign)
+
+        
+
+
+        #Remove elements from modified_list_mspepalign using indices in merged
+        #for index in sorted(taken_list, reverse=True):
+        #    if 0 <= index < len(modified_list_mspepalign):
+        #        del modified_list_mspepalign[index]
+        
+
+        # Remove duplicates from modified_list_mspepalign while preserving order
+        #modified_list_mspepalign = list(dict.fromkeys(modified_list_mspepalign))
+        
+        
+        if alg_base == "viterbi" and consensus_alignment == True and mspeptide_alignment == True:
+            # ANSI escape code for blue color
+            blue_color = "\033[94m"
+            # ANSI escape code to reset color
+            reset_color = "\033[0m"
+            
+            # Print table header
+            def print_header():
+                ID = 'ID'
+                Alignment = 'Alignment'
+                print("{:<20} {}".format(ID, Alignment))
+
+            # Call the function
+            print_header()
+            
+            
+            
+            
             def count_letters(strings_list, letters):
                 total_residues = sum(len(peptide) for peptide in strings_list)
                 total_letter_count = 0
@@ -1318,7 +1378,7 @@ class Decoder:
             # ANSI escape code to reset color
             reset_color = "\033[0m"
             red_color = "\033[91m"  # ANSI escape code for red color
-            ref_seq = most_occuring_letter(modified_list_mspepalign)
+            
             # Print table header
             def print_header():
                 ID = 'ID'
@@ -1347,15 +1407,15 @@ class Decoder:
                             mismatch += 1
                     print(f"{'Alignment':<20} {i:<5} {highlighted_mod_ali}")
 
-            if full_peptide_cov is not None:
-                print("Estimated amount of peptides needed for full coverages:", estimation_peptides_cov)
+            if gaps != 0:
+                #print("Estimated amount of peptides needed for full coverages:", estimation_peptides_cov)
+                print("Coverages to the model estimated to (%):", (len(self.consseq) - gaps) / len(self.consseq))
                 print("Procentage of mismatched residues in the peptide alignment:", (mismatch/sum(len(peptide) for peptide in modified_list_mspepalign)))
-                print("test", len(set(taken_list)) + i)
             else:
-                print("Coverages to the model estimated to (%):", (len(self.consseq) - len(gaps)) / len(self.consseq))
+                print("Coverages to the model estimated to (%):", (len(self.consseq) - gaps) / len(self.consseq))
                 print("Procentage of mismatched residues in the peptide alignment:", (mismatch/sum(len(peptide) for peptide in modified_list_mspepalign)))
 
-                print(mismatch, sum(len(peptide) for peptide in modified_list_mspepalign), len(self.consseq), len(gaps))
+                print(mismatch, sum(len(peptide) for peptide in modified_list_mspepalign), len(self.consseq), gaps)
             
         # Open an HTML file in write mode
             # Open an HTML file in write mode
@@ -1388,16 +1448,32 @@ class Decoder:
                     html_file.write(highlighted_mod_ali + "</pre></td></tr>\n")
 
                 # Write additional information if available
-                if full_peptide_cov is not None:
-                    html_file.write("<tr><td>Estimated amount of peptides needed for full coverage</td><td>")
-                    html_file.write(str(estimation_peptides_cov) + "</td></tr>\n")
+                if gaps != 0:
+                    #html_file.write("<tr><td>Estimated amount of peptides needed for full coverage</td><td>")
+                    #html_file.write(str(estimation_peptides_cov) + "</td></tr>\n")
+                    html_file.write("<tr><td>Coverage to the model estimated to (%)</td><td>")
+                    html_file.write(str((len(self.consseq) - gaps) / len(self.consseq)) + "</td></tr>\n")
                     html_file.write("<tr><td>Percentage of mismatched residues in the peptide alignment</td><td>")
                     html_file.write(str((mismatch / sum(len(peptide) for peptide in modified_list_mspepalign))) + "</td></tr>\n")
                 else:
                     html_file.write("<tr><td>Coverage to the model estimated to (%)</td><td>")
-                    html_file.write(str((len(self.consseq) - len(gaps)) / len(self.consseq)) + "</td></tr>\n")
+                    html_file.write(str((len(self.consseq) - gaps) / len(self.consseq)) + "</td></tr>\n")
                     html_file.write("<tr><td>Percentage of mismatched residues in the peptide alignment</td><td>")
                     html_file.write(str((mismatch / sum(len(peptide) for peptide in modified_list_mspepalign))) + "</td></tr>\n")
+
+                # Write additional information
+                html_file.write("<tr><td>Estimated procentage of peptide residues predicted to be homologous to the model:</td><td>")
+                html_file.write(str(count_letters(full_state_list, ["M","I","D","Ö"])) + "</td></tr>\n")
+
+                html_file.write("<tr><td>Estimated procentage of peptide residues predicted to be non-homologous to the model, N-terminal side:</td><td>")
+                html_file.write(str(count_letters(full_state_list, ["N"])) + "</td></tr>\n")
+
+                html_file.write("<tr><td>Estimated procentage of peptide residues predicted to be non-homologous to the model, C-terminal side:</td><td>")
+                html_file.write(str(count_letters(full_state_list, ["C"])) + "</td></tr>\n")
+
+                html_file.write("<tr><td>Estimated procentage of peptide residues predicted to encompass inversion uncertainty:</td><td>")
+                html_file.write(str(count_letters(full_state_list, ["Ö"])) + "</td></tr>\n")
+
 
                 # Close the table and HTML tags
                 html_file.write("</table>\n</body>\n</html>")
@@ -1431,7 +1507,7 @@ import timeit
                 
 test = Decoder("sequences.FASTA","super_hmm1.hmm")
 #test.forward()
-test.inverse(alg_base="viterbi", inverse_mode=True, consensus_alignment=True, mspeptide_alignment=True)
+test.inverse(alg_base="viterbi", inverse_mode=False, consensus_alignment=True, mspeptide_alignment=True)
 #profile.run('test.inverse(alg_base="viterbi", inverse_mode=True, consensus_alignment=True, mspeptide_alignment=True)')
 #callable_func = lambda: test.inverse(alg_base="viterbi", inverse_mode=True, consensus_alignment=True, mspeptide_alignment=True)
 
